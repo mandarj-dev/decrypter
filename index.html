@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Decryption Tool</title>
+  <link rel="stylesheet" href="/src/style.css" />
+</head>
+<body>
+  <div class="page">
+    <div class="header">
+      <h1 class="title">Decryption Tool</h1>
+      <p class="subtitle">Decrypt AES-encrypted data securely in your browser</p>
+    </div>
+    
+    <div class="grid">
+      <!-- Input Card -->
+      <div class="card fade-in">
+        <div class="card-header">
+          <h3>Input</h3>
+        </div>
+        <div class="card-body">
+          <form id="decrypt-form">
+            <div class="form-group">
+              <label for="key">Secret Key</label>
+              <input 
+                type="text" 
+                id="key" 
+                name="key" 
+                placeholder="Enter your secret key..." 
+                autocomplete="off"
+                required 
+              />
+            </div>
+            
+            <div class="form-group">
+              <label for="data">Encrypted Data (Base64)</label>
+              <textarea 
+                id="data" 
+                name="data" 
+                placeholder="Paste encrypted response here..." 
+                required
+              ></textarea>
+            </div>
+            
+            <div class="actions">
+              <button class="btn primary" type="submit" id="decrypt-btn">
+                <span>Decrypt</span>
+              </button>
+              <button class="btn" type="button" id="paste-btn">
+                <span>Paste</span>
+              </button>
+              <button class="btn" type="button" id="clear-btn">
+                <span>Clear</span>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+      
+      <!-- Output Card -->
+      <div class="card output fade-in">
+        <div class="card-header">
+          <h3>Decrypted Output</h3>
+          <div class="actions">
+            <button class="btn success" type="button" id="copy-btn" title="Copy to clipboard">
+              <span>Copy</span>
+            </button>
+            <button class="btn" type="button" id="format-btn" title="Format JSON">
+              <span>Format</span>
+            </button>
+            <button class="btn" type="button" id="minify-btn" title="Minify JSON">
+              <span>Minify</span>
+            </button>
+            <button class="btn" type="button" id="wrap-btn" title="Toggle word wrap">
+              <span>Wrap</span>
+            </button>
+            <button class="btn" type="button" id="download-btn" title="Download file">
+              <span>Download</span>
+            </button>
+          </div>
+        </div>
+        <pre id="output"><code id="output-code"></code></pre>
+      </div>
+    </div>
+    
+    <div class="status-message" role="status" aria-live="polite"></div>
+  </div>
+  
+  <div id="snackbar" role="alert" aria-live="assertive"></div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
