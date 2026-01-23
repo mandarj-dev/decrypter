@@ -5,24 +5,31 @@ A modern, client-side web-based decryption tool built with Vite and vanilla Java
 ## Features
 
 - 🔐 Client-side AES decryption (CBC mode with PKCS7 padding)
-- 🎨 Modern, responsive UI with beautiful design
+- 🎨 Modern, minimal dark mode UI with smooth animations
+- 📱 **Progressive Web App (PWA)** - Install and use offline
 - 📋 Copy, paste, and download functionality
 - 🔧 JSON formatting and minification
 - 🚀 Fast Vite dev server with HMR
 - 🔒 100% client-side - your data never leaves your browser
 - ⚡ No backend needed - pure JavaScript
+- ⌨️ Keyboard shortcuts (Ctrl/Cmd + Enter to decrypt)
+- ✨ Enhanced micro-interactions and visual feedback
 
 ## Project Structure
 
 ```
 .
 ├── package.json          # Node dependencies
-├── vite.config.js        # Vite configuration
+├── vite.config.js        # Vite configuration with PWA plugin
 ├── index.html            # Main HTML file
+├── public/
+│   ├── manifest.json    # PWA manifest
+│   ├── sw.js            # Service worker
+│   └── icon-*.png       # PWA icons
 └── src/
-    ├── main.js           # JavaScript logic
+    ├── main.js           # JavaScript logic + PWA registration
     ├── decrypt.js        # Decryption utilities
-    └── style.css         # Styles
+    └── style.css         # Enhanced dark mode styles
 ```
 
 ## Setup & Installation
@@ -52,13 +59,25 @@ That's it! No backend setup required. 🎉
 
 1. Enter your **secret key** in the first input field
 2. Paste your **Base64-encoded encrypted data** in the textarea
-3. Click **Decrypt** to decrypt the data
+3. Click **Decrypt** (or press `Ctrl/Cmd + Enter`) to decrypt the data
 4. Use the output panel buttons to:
    - **Copy**: Copy decrypted output to clipboard
-   - **Toggle Wrap**: Toggle text wrapping
-   - **Format JSON**: Beautify JSON output
-   - **Minify JSON**: Compress JSON output
+   - **Format**: Beautify JSON output
+   - **Minify**: Compress JSON output
+   - **Wrap**: Toggle text wrapping
    - **Download**: Save output as file
+
+### Keyboard Shortcuts
+
+- `Ctrl/Cmd + Enter`: Decrypt
+- `Escape`: Clear all fields
+
+### Installing as PWA
+
+1. Visit the app in a supported browser (Chrome, Edge, Safari, etc.)
+2. Look for the install prompt or click the "Install App" button
+3. The app will be installed and can be used offline
+4. Updates are automatically downloaded when available
 
 ## Build for Production
 
@@ -89,8 +108,18 @@ The decryption happens entirely in your browser using the **CryptoJS** library:
 ## Technologies Used
 
 - **Frontend**: Vite, Vanilla JavaScript, CSS3
+- **PWA**: Vite PWA Plugin, Service Workers
 - **Encryption**: CryptoJS (AES-256-CBC with MD5 key derivation)
 - **Dev Server**: Vite with HMR
+- **UI**: Modern dark mode with glassmorphism effects and smooth animations
+
+## PWA Features
+
+- ✅ **Offline Support**: Works without internet connection
+- ✅ **Installable**: Can be installed on desktop and mobile devices
+- ✅ **Auto Updates**: Automatically checks for and installs updates
+- ✅ **Fast Loading**: Cached resources for instant startup
+- ✅ **Native Feel**: Standalone app experience
 
 ## License
 

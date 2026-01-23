@@ -254,6 +254,74 @@ document.addEventListener('keydown', (e) => {
   }
 });
 
+// PWA Installation
+let deferredPrompt;
+const installBtn = document.createElement('button');
+installBtn.className = 'btn install-btn';
+installBtn.innerHTML = '<span>Install App</span>';
+installBtn.style.display = 'none';
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  installBtn.style.display = 'inline-flex';
+  installBtn.addEventListener('click', async () => {
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      showToast('✓ App installed successfully');
+      installBtn.style.display = 'none';
+    }
+    deferredPrompt = null;
+  });
+});
+
+window.addEventListener('appinstalled', () => {
+  showToast('✓ App installed successfully');
+  installBtn.style.display = 'none';
+  deferredPrompt = null;
+});
+
+// Add install button to header if not already installed
+if (window.matchMedia('(display-mode: standalone)').matches) {
+  // Already installed
+} else {
+  document.querySelector('.header').appendChild(installBtn);
+}
+
+// Service Worker Registration
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', async () => {
+    try {
+      // Use Vite PWA plugin's service worker if available, otherwise use our custom one
+      const swPath = '/sw.js';
+      const registration = await navigator.serviceWorker.register(swPath, {
+        scope: '/'
+      });
+      console.log('Service Worker registered:', registration);
+      
+      // Check for updates
+      registration.addEventListener('updatefound', () => {
+        const newWorker = registration.installing;
+        if (newWorker) {
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+              showToast('New version available. Refresh to update.', 5000);
+            }
+          });
+        }
+      });
+      
+      // Periodic update check
+      setInterval(() => {
+        registration.update();
+      }, 60000); // Check every minute
+    } catch (error) {
+      console.log('Service Worker registration failed:', error);
+    }
+  });
+}
+
 // Auto-focus and initialize
 window.addEventListener('load', () => {
   $('#data').focus();
