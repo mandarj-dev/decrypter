@@ -49,6 +49,30 @@ function setLoading(loading) {
   }
 }
 
+function formatOutputJson({ silent = false } = {}) {
+  let raw = getOutput();
+  if (!raw) {
+    if (!silent) showToast('Nothing to format');
+    return false;
+  }
+
+  try {
+    let obj = JSON.parse(raw);
+    // If obj is a string that looks like JSON, try parsing again
+    if (typeof obj === 'string') {
+      try {
+        obj = JSON.parse(obj);
+      } catch (_) {}
+    }
+    setOutput(JSON.stringify(obj, null, 2));
+    if (!silent) showToast('✓ JSON formatted');
+    return true;
+  } catch (e) {
+    if (!silent) showToast('Not valid JSON');
+    return false;
+  }
+}
+
 // Decrypt form submission
 $('#decrypt-form').addEventListener('submit', async (e) => {
   e.preventDefault();
@@ -79,12 +103,7 @@ $('#decrypt-form').addEventListener('submit', async (e) => {
     showToast('✓ Decrypted successfully');
     
     // Auto-format if it looks like JSON
-    try {
-      JSON.parse(decrypted);
-      setTimeout(() => {
-        showToast('Tip: Click Format to beautify JSON', 4000);
-      }, 1000);
-    } catch (_) {}
+    formatOutputJson({ silent: true });
     
   } catch (error) {
     setOutput('');
@@ -132,25 +151,7 @@ $('#wrap-btn').addEventListener('click', () => {
 
 // Format JSON button
 $('#format-btn').addEventListener('click', () => {
-  let raw = getOutput();
-  if (!raw) {
-    showToast('Nothing to format');
-    return;
-  }
-  
-  try {
-    let obj = JSON.parse(raw);
-    // If obj is a string that looks like JSON, try parsing again
-    if (typeof obj === 'string') {
-      try { 
-        obj = JSON.parse(obj); 
-      } catch(_) {}
-    }
-    setOutput(JSON.stringify(obj, null, 2));
-    showToast('✓ JSON formatted');
-  } catch (e) {
-    showToast('Not valid JSON');
-  }
+  formatOutputJson();
 });
 
 // Minify JSON button
