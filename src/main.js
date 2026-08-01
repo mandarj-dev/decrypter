@@ -1,222 +1,214 @@
+import './style.css';
 import { decryptAES } from './decrypt.js';
+import {
+  getHistory,
+  addHistoryEntry,
+  removeHistoryEntry,
+  clearHistory,
+  formatTime,
+} from './history.js';
 
 const $ = (sel) => document.querySelector(sel);
-const $$ = (sel) => document.querySelectorAll(sel);
 
 const outputEl = $('#output-code');
-const preEl = $('#output');
-const statusEl = $('.status-message');
+const statusEl = $('#status');
 const decryptBtn = $('#decrypt-btn');
+const historyList = $('#history-list');
+const clearHistoryBtn = $('#clear-history-btn');
 
-// State
-let isDecrypting = false;
+let busy = false;
 
-function setOutput(text) { 
-  outputEl.textContent = text || ''; 
-  if (text) {
-    preEl.classList.add('fade-in');
-  }
+function setOutput(text) {
+  outputEl.textContent = text || '';
 }
 
-function getOutput() { 
-  return outputEl.textContent || ''; 
+function getOutput() {
+  return outputEl.textContent || '';
 }
 
-function showToast(msg, duration = 2800) {
-  const el = document.getElementById('snackbar');
+function showToast(msg, ms = 2200) {
+  const el = $('#toast');
   el.textContent = msg;
   el.classList.add('show');
-  setTimeout(() => el.classList.remove('show'), duration);
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => el.classList.remove('show'), ms);
 }
 
 function setStatus(msg, type = '') {
   statusEl.textContent = msg;
-  statusEl.className = 'status-message ' + type;
-  if (msg) {
-    statusEl.classList.add('fade-in');
-  }
+  statusEl.className = 'status' + (type ? ` ${type}` : '');
 }
 
-function setLoading(loading) {
-  isDecrypting = loading;
+function setBusy(loading) {
+  busy = loading;
   decryptBtn.disabled = loading;
-  if (loading) {
-    decryptBtn.classList.add('loading');
-    decryptBtn.innerHTML = '<span>Decrypting...</span>';
-  } else {
-    decryptBtn.classList.remove('loading');
-    decryptBtn.innerHTML = '<span>Decrypt</span>';
+  decryptBtn.textContent = loading ? 'Decrypting…' : 'Decrypt';
+}
+
+function normalizeInput(raw) {
+  let value = raw.trim();
+  if (
+    (value.startsWith('"') && value.endsWith('"')) ||
+    (value.startsWith("'") && value.endsWith("'"))
+  ) {
+    value = value.slice(1, -1).trim();
   }
+  return value;
+}
+
+function unwrapNestedJson(obj) {
+  if (typeof obj === 'string') {
+    try {
+      return JSON.parse(obj);
+    } catch {
+      return obj;
+    }
+  }
+  if (obj && typeof obj === 'object' && !Array.isArray(obj) && typeof obj.req_body === 'string') {
+    try {
+      return { ...obj, req_body: JSON.parse(obj.req_body) };
+    } catch {
+      return obj;
+    }
+  }
+  return obj;
 }
 
 function formatOutputJson({ silent = false } = {}) {
-  let raw = getOutput();
+  const raw = getOutput();
   if (!raw) {
     if (!silent) showToast('Nothing to format');
     return false;
   }
-
   try {
     let obj = JSON.parse(raw);
-    // If obj is a string that looks like JSON, try parsing again
-    if (typeof obj === 'string') {
-      try {
-        obj = JSON.parse(obj);
-      } catch (_) {}
-    }
+    obj = unwrapNestedJson(obj);
     setOutput(JSON.stringify(obj, null, 2));
-    if (!silent) showToast('✓ JSON formatted');
+    if (!silent) showToast('Formatted');
     return true;
-  } catch (e) {
+  } catch {
     if (!silent) showToast('Not valid JSON');
     return false;
   }
 }
 
-// Decrypt form submission
-$('#decrypt-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  if (isDecrypting) return;
-  
-  const key = $('#key').value.trim();
-  const data = $('#data').value.trim();
-  
-  if (!key || !data) {
-    setStatus('Please provide both key and data', 'error');
-    showToast('Missing required fields');
+function preview(text) {
+  const oneLine = text.replace(/\s+/g, ' ').trim();
+  return oneLine.length > 60 ? oneLine.slice(0, 60) + '…' : oneLine;
+}
+
+function renderHistory() {
+  const items = getHistory();
+  clearHistoryBtn.hidden = items.length === 0;
+
+  if (items.length === 0) {
+    historyList.innerHTML =
+      '<li class="history-empty">Decrypted results appear here for this session</li>';
     return;
   }
-  
+
+  historyList.innerHTML = items
+    .map(
+      (item) => `
+    <li class="history-item" data-id="${item.id}">
+      <span class="history-time">${formatTime(item.at)}</span>
+      <button type="button" class="history-load" data-id="${item.id}">
+        <span class="history-preview">${escapeHtml(preview(item.output))}</span>
+        <span class="history-meta">from: ${escapeHtml(item.inputPreview || '—')}</span>
+      </button>
+      <button type="button" class="history-remove" data-id="${item.id}" title="Remove">×</button>
+    </li>`
+    )
+    .join('');
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function loadFromHistory(id) {
+  const item = getHistory().find((e) => e.id === id);
+  if (!item) return;
+  setOutput(item.output);
+  setStatus('Loaded from history', 'success');
+  formatOutputJson({ silent: true });
+}
+
+$('#decrypt-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  if (busy) return;
+
+  const key = $('#key').value.trim();
+  const data = normalizeInput($('#data').value);
+
+  if (!key) {
+    setStatus('Secret key is required', 'error');
+    showToast('Secret key is required');
+    return;
+  }
+  if (!data) {
+    setStatus('Encrypted data is required', 'error');
+    showToast('Encrypted data is required');
+    return;
+  }
+
   try {
-    setLoading(true);
-    setStatus('Decrypting...', 'info');
-    
-    // Small delay for better UX
-    await new Promise(resolve => setTimeout(resolve, 100));
-    
-    // Decrypt using client-side JavaScript
+    setBusy(true);
+    setStatus('Decrypting…');
+
+    await new Promise((r) => setTimeout(r, 50));
+
     const decrypted = decryptAES(data, key);
-    
     setOutput(decrypted);
-    setStatus('Decryption successful', 'success');
-    showToast('✓ Decrypted successfully');
-    
-    // Auto-format if it looks like JSON
     formatOutputJson({ silent: true });
-    
+
+    addHistoryEntry({ output: getOutput(), inputPreview: data });
+    renderHistory();
+
+    setStatus('Decrypted successfully', 'success');
+    showToast('Decrypted');
   } catch (error) {
     setOutput('');
-    setStatus(error.message || 'Decryption failed', 'error');
-    showToast('✗ Decryption failed');
+    const msg = error.message || 'Decryption failed';
+    const friendly =
+      msg.includes('invalid key') || msg.includes('corrupted')
+        ? 'Check your key and ciphertext'
+        : msg;
+    setStatus(friendly, 'error');
+    showToast('Decryption failed');
   } finally {
-    setLoading(false);
+    setBusy(false);
   }
 });
 
-// Copy button
 $('#copy-btn').addEventListener('click', async () => {
   const text = getOutput();
   if (!text) {
     showToast('Nothing to copy');
     return;
   }
-  
   try {
     await navigator.clipboard.writeText(text);
-    showToast('✓ Copied to clipboard');
-    
-    // Visual feedback
-    const btn = $('#copy-btn');
-    const originalText = btn.innerHTML;
-    btn.innerHTML = '<span>Copied!</span>';
-    btn.classList.add('success');
-    setTimeout(() => {
-      btn.innerHTML = originalText;
-      btn.classList.remove('success');
-    }, 2000);
-  } catch (err) {
+    showToast('Copied');
+  } catch {
     showToast('Copy failed');
   }
 });
 
-// Toggle wrap button
-let isWrapped = false;
-$('#wrap-btn').addEventListener('click', () => {
-  isWrapped = !isWrapped;
-  preEl.style.whiteSpace = isWrapped ? 'pre-wrap' : 'pre';
-  $('#wrap-btn').innerHTML = `<span>${isWrapped ? 'No Wrap' : 'Wrap'}</span>`;
-  showToast(isWrapped ? 'Word wrap enabled' : 'Word wrap disabled', 1500);
-});
+$('#format-btn').addEventListener('click', () => formatOutputJson());
 
-// Format JSON button
-$('#format-btn').addEventListener('click', () => {
-  formatOutputJson();
-});
-
-// Minify JSON button
-$('#minify-btn').addEventListener('click', () => {
-  let raw = getOutput();
-  if (!raw) {
-    showToast('Nothing to minify');
-    return;
-  }
-  
-  try {
-    let obj = JSON.parse(raw);
-    if (typeof obj === 'string') { 
-      try { 
-        obj = JSON.parse(obj); 
-      } catch(_) {} 
-    }
-    setOutput(JSON.stringify(obj));
-    showToast('✓ JSON minified');
-  } catch (e) { 
-    showToast('Not valid JSON'); 
-  }
-});
-
-// Download button
-$('#download-btn').addEventListener('click', () => {
-  const text = getOutput();
-  if (!text) {
-    showToast('Nothing to download');
-    return;
-  }
-  
-  let filename = 'decrypted.txt';
-  let mimeType = 'text/plain';
-  
-  try { 
-    JSON.parse(text); 
-    filename = 'decrypted.json';
-    mimeType = 'application/json';
-  } catch(_) {}
-  
-  const blob = new Blob([text], { type: mimeType });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; 
-  a.download = filename; 
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-  
-  showToast(`✓ Downloaded ${filename}`);
-});
-
-// Clear button
 $('#clear-btn').addEventListener('click', () => {
   $('#key').value = '';
   $('#data').value = '';
   setOutput('');
-  setStatus('', '');
+  setStatus('Ready');
   $('#key').focus();
-  showToast('Cleared', 1500);
 });
 
-// Paste button
 $('#paste-btn').addEventListener('click', async () => {
   try {
     const text = await navigator.clipboard.readText();
@@ -224,133 +216,49 @@ $('#paste-btn').addEventListener('click', async () => {
       showToast('Clipboard is empty');
       return;
     }
-    
-    // Try to paste into data field, or key if data is already filled
-    const dataField = $('#data');
-    if (dataField.value.trim()) {
-      dataField.value = text;
-      dataField.focus();
-    } else {
-      dataField.value = text;
-      dataField.focus();
-    }
-    
-    showToast('✓ Pasted from clipboard');
-  } catch (err) { 
+    $('#data').value = normalizeInput(text);
+    $('#data').focus();
+    showToast('Pasted');
+  } catch {
     showToast('Clipboard access denied');
   }
 });
 
-// Keyboard shortcuts
+$('#toggle-key').addEventListener('click', () => {
+  const input = $('#key');
+  const btn = $('#toggle-key');
+  const show = input.type === 'password';
+  input.type = show ? 'text' : 'password';
+  btn.textContent = show ? 'Hide' : 'Show';
+});
+
+historyList.addEventListener('click', (e) => {
+  const loadBtn = e.target.closest('.history-load');
+  const removeBtn = e.target.closest('.history-remove');
+
+  if (loadBtn) {
+    loadFromHistory(loadBtn.dataset.id);
+    return;
+  }
+  if (removeBtn) {
+    removeHistoryEntry(removeBtn.dataset.id);
+    renderHistory();
+    showToast('Removed');
+  }
+});
+
+clearHistoryBtn.addEventListener('click', () => {
+  clearHistory();
+  renderHistory();
+  showToast('History cleared');
+});
+
 document.addEventListener('keydown', (e) => {
-  // Ctrl/Cmd + Enter to decrypt
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
-    $('#decrypt-form').dispatchEvent(new Event('submit'));
-  }
-  
-  // Escape to clear
-  if (e.key === 'Escape' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
-    $('#clear-btn').click();
+    $('#decrypt-form').requestSubmit();
   }
 });
 
-// PWA Installation
-let deferredPrompt;
-const installBtn = document.createElement('button');
-installBtn.className = 'btn install-btn';
-installBtn.innerHTML = '<span>Install App</span>';
-installBtn.style.display = 'none';
-
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault();
-  deferredPrompt = e;
-  installBtn.style.display = 'inline-flex';
-  installBtn.addEventListener('click', async () => {
-    deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
-    if (outcome === 'accepted') {
-      showToast('✓ App installed successfully');
-      installBtn.style.display = 'none';
-    }
-    deferredPrompt = null;
-  });
-});
-
-window.addEventListener('appinstalled', () => {
-  showToast('✓ App installed successfully');
-  installBtn.style.display = 'none';
-  deferredPrompt = null;
-});
-
-// Add install button to header if not already installed
-if (window.matchMedia('(display-mode: standalone)').matches) {
-  // Already installed
-} else {
-  document.querySelector('.header').appendChild(installBtn);
-}
-
-// Service Worker Registration
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', async () => {
-    try {
-      // Use Vite PWA plugin's service worker if available, otherwise use our custom one
-      const swPath = '/sw.js';
-      const registration = await navigator.serviceWorker.register(swPath, {
-        scope: '/'
-      });
-      console.log('Service Worker registered:', registration);
-      
-      // Check for updates
-      registration.addEventListener('updatefound', () => {
-        const newWorker = registration.installing;
-        if (newWorker) {
-          newWorker.addEventListener('statechange', () => {
-            if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-              showToast('New version available. Refresh to update.', 5000);
-            }
-          });
-        }
-      });
-      
-      // Periodic update check
-      setInterval(() => {
-        registration.update();
-      }, 60000); // Check every minute
-    } catch (error) {
-      console.log('Service Worker registration failed:', error);
-    }
-  });
-}
-
-// Auto-focus and initialize
-window.addEventListener('load', () => {
-  $('#data').focus();
-  setStatus('Enter your secret key and encrypted data to begin', 'info');
-  
-  // Add smooth entrance animation
-  document.body.style.opacity = '0';
-  setTimeout(() => {
-    document.body.style.transition = 'opacity 0.3s ease-in';
-    document.body.style.opacity = '1';
-  }, 10);
-});
-
-// Input validation feedback
-$('#key').addEventListener('input', () => {
-  const key = $('#key').value.trim();
-  if (key.length > 0) {
-    $('#key').style.borderColor = 'var(--accent)';
-  } else {
-    $('#key').style.borderColor = '';
-  }
-});
-
-$('#data').addEventListener('input', () => {
-  const data = $('#data').value.trim();
-  if (data.length > 0) {
-    $('#data').style.borderColor = 'var(--accent)';
-  } else {
-    $('#data').style.borderColor = '';
-  }
-});
+renderHistory();
+$('#data').focus();

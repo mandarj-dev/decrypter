@@ -2,100 +2,68 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-  <meta name="description" content="Decrypt AES-encrypted data securely in your browser - No backend required" />
-  <meta name="theme-color" content="#6366f1" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="Decrypt" />
-  <title>Decryption Tool</title>
-  <link rel="manifest" href="/manifest.json" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Decrypt AES-encrypted data in your browser" />
+  <meta name="theme-color" content="#1a1b26" />
+  <title>Decrypter</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon-192.png" />
-  <link rel="stylesheet" href="/src/style.css" />
 </head>
 <body>
-  <div class="page">
-    <div class="header">
-      <h1 class="title">Decryption Tool</h1>
-      <p class="subtitle">Decrypt AES-encrypted data securely in your browser</p>
-    </div>
-    
-    <div class="grid">
-      <!-- Input Card -->
-      <div class="card fade-in">
-        <div class="card-header">
-          <h3>Input</h3>
-        </div>
-        <div class="card-body">
-          <form id="decrypt-form">
-            <div class="form-group">
-              <label for="key">Secret Key</label>
-              <input 
-                type="text" 
-                id="key" 
-                name="key" 
-                placeholder="Enter your secret key..." 
-                autocomplete="off"
-                required 
-              />
+  <div class="app">
+    <header class="header">
+      <h1>Decrypter</h1>
+      <p>AES decryption — runs entirely in your browser</p>
+    </header>
+
+    <main class="main">
+      <section class="panel">
+        <form id="decrypt-form">
+          <label class="field">
+            <span>Secret key</span>
+            <div class="key-row">
+              <input type="password" id="key" autocomplete="off" placeholder="Enter secret key" required />
+              <button type="button" class="btn-text" id="toggle-key">Show</button>
             </div>
-            
-            <div class="form-group">
-              <label for="data">Encrypted Data (Base64)</label>
-              <textarea 
-                id="data" 
-                name="data" 
-                placeholder="Paste encrypted response here..." 
-                required
-              ></textarea>
-            </div>
-            
-            <div class="actions">
-              <button class="btn primary" type="submit" id="decrypt-btn">
-                <span>Decrypt</span>
-              </button>
-              <button class="btn" type="button" id="paste-btn">
-                <span>Paste</span>
-              </button>
-              <button class="btn" type="button" id="clear-btn">
-                <span>Clear</span>
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-      
-      <!-- Output Card -->
-      <div class="card output fade-in">
-        <div class="card-header">
-          <h3>Decrypted Output</h3>
+          </label>
+
+          <label class="field">
+            <span>Encrypted data (Base64)</span>
+            <textarea id="data" rows="6" placeholder="Paste encrypted response…" required></textarea>
+          </label>
+
           <div class="actions">
-            <button class="btn success" type="button" id="copy-btn" title="Copy to clipboard">
-              <span>Copy</span>
-            </button>
-            <button class="btn" type="button" id="format-btn" title="Format JSON">
-              <span>Format</span>
-            </button>
-            <button class="btn" type="button" id="minify-btn" title="Minify JSON">
-              <span>Minify</span>
-            </button>
-            <button class="btn" type="button" id="wrap-btn" title="Toggle word wrap">
-              <span>Wrap</span>
-            </button>
-            <button class="btn" type="button" id="download-btn" title="Download file">
-              <span>Download</span>
-            </button>
+            <button class="btn btn-primary" type="submit" id="decrypt-btn">Decrypt</button>
+            <button class="btn" type="button" id="paste-btn">Paste</button>
+            <button class="btn" type="button" id="clear-btn">Clear</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="panel panel-output">
+        <div class="panel-head">
+          <h2>Output</h2>
+          <div class="actions actions-inline">
+            <button class="btn btn-sm" type="button" id="format-btn">Format</button>
+            <button class="btn btn-sm" type="button" id="copy-btn">Copy</button>
           </div>
         </div>
         <pre id="output"><code id="output-code"></code></pre>
-      </div>
-    </div>
-    
-    <div class="status-message" role="status" aria-live="polite"></div>
+        <p class="status" id="status">Ready</p>
+      </section>
+
+      <section class="panel panel-history">
+        <div class="panel-head">
+          <h2>Session history</h2>
+          <button class="btn btn-sm btn-ghost" type="button" id="clear-history-btn" hidden>Clear</button>
+        </div>
+        <ul id="history-list" class="history-list">
+          <li class="history-empty">Decrypted results appear here for this session</li>
+        </ul>
+      </section>
+    </main>
   </div>
-  
-  <div id="snackbar" role="alert" aria-live="assertive"></div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

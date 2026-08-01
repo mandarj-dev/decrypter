@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --port 3004",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "decrypt": "node decrypt-cli.mjs"
   },
   "dependencies": {
     "crypto-js": "^4.2.0"
