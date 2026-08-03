@@ -1,11 +1,16 @@
-import { defineConfig } from 'vite'
-// import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
 
 export default defineConfig({
   server: {
-    port: 3004,
+    port: 5173,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
   },
-  plugins: [
-  ]
-})
-
+  preview: {
+    port: 5173,
+    headers: {
+      'Cache-Control': 'no-store',
+    },
+  },
+});

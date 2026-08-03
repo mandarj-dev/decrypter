@@ -1,6 +1,6 @@
 import './style.css';
 import { decryptAES } from './decrypt.js';
-import { highlightJson } from './jsonHighlight.js';
+import { extractEncryptedInput } from './inputParser.js';
 import {
   getHistory,
   addHistoryEntry,
@@ -8,6 +8,16 @@ import {
   clearHistory,
   formatTime,
 } from './history.js';
+
+// Remove stale service workers that cache old HTML/CSS/JS.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((regs) => {
+    regs.forEach((reg) => reg.unregister());
+  });
+  if ('caches' in window) {
+    caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+  }
+}
 
 const $ = (sel) => document.querySelector(sel);
 
@@ -68,15 +78,27 @@ function setBusy(loading) {
   if (loading) setStatus('Decrypting…', 'info');
 }
 
-function normalizeInput(raw) {
-  let value = raw.trim();
-  if (
-    (value.startsWith('"') && value.endsWith('"')) ||
-    (value.startsWith("'") && value.endsWith("'"))
-  ) {
-    value = value.slice(1, -1).trim();
+function applyInputCleanup({ notify = false } = {}) {
+  const field = $('#data');
+  const { value, cleaned } = extractEncryptedInput(field.value);
+  if (cleaned && value) {
+    field.value = value;
+    if (notify) showToast('Extracted encrypted data from JSON wrapper');
   }
+  updateFieldStates();
   return value;
+}
+
+function setPastedInput(raw, source = 'Pasted') {
+  const { value, cleaned } = extractEncryptedInput(raw);
+  $('#data').value = value;
+  updateFieldStates();
+  if (cleaned) {
+    showToast('Extracted encrypted data from JSON wrapper');
+  } else {
+    showToast(`${source} — press Decrypt or Ctrl+Enter`);
+  }
+  $('#data').focus();
 }
 
 function unwrapNestedJson(obj) {
@@ -181,7 +203,7 @@ async function runDecrypt() {
   if (busy) return;
 
   const key = $('#key').value.trim();
-  const data = normalizeInput($('#data').value);
+  const data = applyInputCleanup({ notify: true });
 
   if (!key) {
     setStatus('Secret key is required', 'error');
@@ -319,10 +341,7 @@ $('#paste-btn').addEventListener('click', async () => {
       showToast('Clipboard is empty');
       return;
     }
-    $('#data').value = normalizeInput(text);
-    updateFieldStates();
-    $('#data').focus();
-    showToast('Pasted — press Decrypt or Ctrl+Enter');
+    setPastedInput(text);
   } catch {
     showToast('Clipboard access denied');
   }
@@ -359,9 +378,7 @@ const dropZone = $('#drop-zone');
 dropZone.addEventListener('drop', (e) => {
   const text = e.dataTransfer?.getData('text');
   if (text) {
-    $('#data').value = normalizeInput(text);
-    updateFieldStates();
-    showToast('Dropped — press Decrypt or Ctrl+Enter');
+    setPastedInput(text, 'Dropped');
   }
 });
 

@@ -7,6 +7,18 @@
   <meta name="theme-color" content="#0c0d10" />
   <title>Decryption Tool</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="stylesheet" href="/src/style.css" />
+  <script>
+    // Purge legacy PWA cache immediately (runs before modules load).
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then((regs) => {
+        regs.forEach((reg) => reg.unregister());
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then((keys) => keys.forEach((key) => caches.delete(key)));
+    }
+  </script>
 </head>
 <body>
   <div class="app">

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFileSync } from 'node:fs';
 import { decryptAES } from './lib/decrypt.mjs';
+import { extractEncryptedInput } from './src/inputParser.js';
 
 function usage() {
   console.error(`Usage:
@@ -50,8 +51,11 @@ async function main() {
 
   if (!opts.key || !opts.data) usage();
 
+  const { value: ciphertext } = extractEncryptedInput(opts.data);
+  if (!ciphertext) usage();
+
   try {
-    const decrypted = decryptAES(opts.data, opts.key);
+    const decrypted = decryptAES(ciphertext, opts.key);
     process.stdout.write(decrypted);
     if (!decrypted.endsWith('\n')) process.stdout.write('\n');
   } catch (error) {
