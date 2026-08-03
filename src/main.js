@@ -1,5 +1,6 @@
 import './style.css';
 import { decryptAES } from './decrypt.js';
+import { highlightJson } from './jsonHighlight.js';
 import {
   getHistory,
   addHistoryEntry,
@@ -11,22 +12,42 @@ import {
 const $ = (sel) => document.querySelector(sel);
 
 const outputEl = $('#output-code');
-const statusEl = $('#status');
+const preEl = $('#output');
+const statusBar = $('#status-bar');
+const statusText = $('#status-text');
 const decryptBtn = $('#decrypt-btn');
 const historyList = $('#history-list');
+const historyCount = $('#history-count');
+const historyPanel = $('#history-panel');
+const historyBody = $('#history-body');
+const historyToggle = $('#history-toggle');
 const clearHistoryBtn = $('#clear-history-btn');
+const wrapBtn = $('#wrap-btn');
 
 let busy = false;
+let activeHistoryId = null;
 
 function setOutput(text) {
-  outputEl.textContent = text || '';
+  if (!text) {
+    outputEl.textContent = '';
+    preEl.classList.add('empty');
+    return;
+  }
+
+  preEl.classList.remove('empty');
+  try {
+    JSON.parse(text);
+    outputEl.innerHTML = highlightJson(text);
+  } catch {
+    outputEl.textContent = text;
+  }
 }
 
 function getOutput() {
   return outputEl.textContent || '';
 }
 
-function showToast(msg, ms = 2200) {
+function showToast(msg, ms = 2400) {
   const el = $('#toast');
   el.textContent = msg;
   el.classList.add('show');
@@ -34,15 +55,17 @@ function showToast(msg, ms = 2200) {
   showToast._t = setTimeout(() => el.classList.remove('show'), ms);
 }
 
-function setStatus(msg, type = '') {
-  statusEl.textContent = msg;
-  statusEl.className = 'status' + (type ? ` ${type}` : '');
+function setStatus(msg, type = 'ready') {
+  statusText.textContent = msg;
+  statusBar.className = 'status-bar' + (type ? ` ${type}` : '');
 }
 
 function setBusy(loading) {
   busy = loading;
   decryptBtn.disabled = loading;
+  decryptBtn.classList.toggle('loading', loading);
   decryptBtn.textContent = loading ? 'Decrypting…' : 'Decrypt';
+  if (loading) setStatus('Decrypting…', 'info');
 }
 
 function normalizeInput(raw) {
@@ -84,7 +107,7 @@ function formatOutputJson({ silent = false } = {}) {
     let obj = JSON.parse(raw);
     obj = unwrapNestedJson(obj);
     setOutput(JSON.stringify(obj, null, 2));
-    if (!silent) showToast('Formatted');
+    if (!silent) showToast('JSON formatted');
     return true;
   } catch {
     if (!silent) showToast('Not valid JSON');
@@ -94,32 +117,7 @@ function formatOutputJson({ silent = false } = {}) {
 
 function preview(text) {
   const oneLine = text.replace(/\s+/g, ' ').trim();
-  return oneLine.length > 60 ? oneLine.slice(0, 60) + '…' : oneLine;
-}
-
-function renderHistory() {
-  const items = getHistory();
-  clearHistoryBtn.hidden = items.length === 0;
-
-  if (items.length === 0) {
-    historyList.innerHTML =
-      '<li class="history-empty">Decrypted results appear here for this session</li>';
-    return;
-  }
-
-  historyList.innerHTML = items
-    .map(
-      (item) => `
-    <li class="history-item" data-id="${item.id}">
-      <span class="history-time">${formatTime(item.at)}</span>
-      <button type="button" class="history-load" data-id="${item.id}">
-        <span class="history-preview">${escapeHtml(preview(item.output))}</span>
-        <span class="history-meta">from: ${escapeHtml(item.inputPreview || '—')}</span>
-      </button>
-      <button type="button" class="history-remove" data-id="${item.id}" title="Remove">×</button>
-    </li>`
-    )
-    .join('');
+  return oneLine.length > 72 ? oneLine.slice(0, 72) + '…' : oneLine;
 }
 
 function escapeHtml(str) {
@@ -130,16 +128,56 @@ function escapeHtml(str) {
     .replace(/"/g, '&quot;');
 }
 
+function updateFieldStates() {
+  $('#key').closest('.field').classList.toggle('field-filled', !!$('#key').value.trim());
+  $('#data').closest('.field').classList.toggle('field-filled', !!$('#data').value.trim());
+}
+
+function setHistoryOpen(open) {
+  historyPanel.classList.toggle('open', open);
+  historyBody.hidden = !open;
+  historyToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function renderHistory() {
+  const items = getHistory();
+  historyCount.textContent = String(items.length);
+  clearHistoryBtn.hidden = items.length === 0;
+
+  if (items.length === 0) {
+    historyList.innerHTML = '<li class="history-empty">No entries yet — decrypt something to build history</li>';
+    return;
+  }
+
+  historyList.innerHTML = items
+    .map(
+      (item) => `
+    <li class="history-item${item.id === activeHistoryId ? ' active' : ''}" data-id="${item.id}">
+      <button type="button" class="history-load" data-id="${item.id}">
+        <span class="history-time">${formatTime(item.at)}</span>
+        <span class="history-preview">${escapeHtml(preview(item.output))}</span>
+      </button>
+      <button type="button" class="history-remove" data-id="${item.id}" title="Remove">×</button>
+    </li>`
+    )
+    .join('');
+}
+
 function loadFromHistory(id) {
   const item = getHistory().find((e) => e.id === id);
   if (!item) return;
+
+  activeHistoryId = id;
+  if (item.input) $('#data').value = item.input;
   setOutput(item.output);
-  setStatus('Loaded from history', 'success');
-  formatOutputJson({ silent: true });
+  updateFieldStates();
+  renderHistory();
+  setStatus('Restored from session history', 'success');
+  showToast('Restored from history');
+  preEl.focus();
 }
 
-$('#decrypt-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
+async function runDecrypt() {
   if (busy) return;
 
   const key = $('#key').value.trim();
@@ -148,41 +186,53 @@ $('#decrypt-form').addEventListener('submit', async (e) => {
   if (!key) {
     setStatus('Secret key is required', 'error');
     showToast('Secret key is required');
+    $('#key').focus();
     return;
   }
   if (!data) {
     setStatus('Encrypted data is required', 'error');
     showToast('Encrypted data is required');
+    $('#data').focus();
     return;
   }
 
   try {
     setBusy(true);
-    setStatus('Decrypting…');
-
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => setTimeout(r, 40));
 
     const decrypted = decryptAES(data, key);
     setOutput(decrypted);
     formatOutputJson({ silent: true });
 
-    addHistoryEntry({ output: getOutput(), inputPreview: data });
+    const entry = addHistoryEntry({ output: getOutput(), input: data });
+    activeHistoryId = entry.id;
     renderHistory();
+    if (!historyPanel.classList.contains('open') && getHistory().length === 1) {
+      setHistoryOpen(true);
+    }
 
-    setStatus('Decrypted successfully', 'success');
-    showToast('Decrypted');
+    setStatus('Decryption successful', 'success');
+    showToast('Decrypted successfully');
+    preEl.focus();
   } catch (error) {
     setOutput('');
+    activeHistoryId = null;
     const msg = error.message || 'Decryption failed';
     const friendly =
       msg.includes('invalid key') || msg.includes('corrupted')
-        ? 'Check your key and ciphertext'
+        ? 'Decryption failed — check your secret key and ciphertext'
         : msg;
     setStatus(friendly, 'error');
     showToast('Decryption failed');
   } finally {
     setBusy(false);
+    renderHistory();
   }
+}
+
+$('#decrypt-form').addEventListener('submit', (e) => {
+  e.preventDefault();
+  runDecrypt();
 });
 
 $('#copy-btn').addEventListener('click', async () => {
@@ -193,7 +243,11 @@ $('#copy-btn').addEventListener('click', async () => {
   }
   try {
     await navigator.clipboard.writeText(text);
-    showToast('Copied');
+    const btn = $('#copy-btn');
+    const original = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = original; }, 1600);
+    showToast('Copied to clipboard');
   } catch {
     showToast('Copy failed');
   }
@@ -201,12 +255,61 @@ $('#copy-btn').addEventListener('click', async () => {
 
 $('#format-btn').addEventListener('click', () => formatOutputJson());
 
+$('#minify-btn').addEventListener('click', () => {
+  const raw = getOutput();
+  if (!raw) {
+    showToast('Nothing to minify');
+    return;
+  }
+  try {
+    let obj = JSON.parse(raw);
+    obj = unwrapNestedJson(obj);
+    setOutput(JSON.stringify(obj));
+    showToast('JSON minified');
+  } catch {
+    showToast('Not valid JSON');
+  }
+});
+
+$('#wrap-btn').addEventListener('click', () => {
+  const wrapped = preEl.classList.toggle('wrap');
+  wrapBtn.setAttribute('aria-pressed', wrapped ? 'true' : 'false');
+  wrapBtn.textContent = wrapped ? 'Wrap' : 'No wrap';
+});
+
+$('#download-btn').addEventListener('click', () => {
+  const text = getOutput();
+  if (!text) {
+    showToast('Nothing to download');
+    return;
+  }
+  let filename = 'decrypted.txt';
+  let mime = 'text/plain';
+  try {
+    JSON.parse(text);
+    filename = 'decrypted.json';
+    mime = 'application/json';
+  } catch { /* plain text */ }
+
+  const blob = new Blob([text], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast(`Downloaded ${filename}`);
+});
+
 $('#clear-btn').addEventListener('click', () => {
-  $('#key').value = '';
   $('#data').value = '';
   setOutput('');
-  setStatus('Ready');
-  $('#key').focus();
+  activeHistoryId = null;
+  updateFieldStates();
+  renderHistory();
+  setStatus('Ready — enter your secret key and encrypted data', 'ready');
+  $('#data').focus();
+  showToast('Cleared input and output');
 });
 
 $('#paste-btn').addEventListener('click', async () => {
@@ -217,8 +320,9 @@ $('#paste-btn').addEventListener('click', async () => {
       return;
     }
     $('#data').value = normalizeInput(text);
+    updateFieldStates();
     $('#data').focus();
-    showToast('Pasted');
+    showToast('Pasted — press Decrypt or Ctrl+Enter');
   } catch {
     showToast('Clipboard access denied');
   }
@@ -232,6 +336,35 @@ $('#toggle-key').addEventListener('click', () => {
   btn.textContent = show ? 'Hide' : 'Show';
 });
 
+$('#key').addEventListener('input', updateFieldStates);
+$('#data').addEventListener('input', () => {
+  activeHistoryId = null;
+  updateFieldStates();
+  renderHistory();
+});
+
+const dropZone = $('#drop-zone');
+['dragenter', 'dragover'].forEach((evt) => {
+  dropZone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+});
+['dragleave', 'drop'].forEach((evt) => {
+  dropZone.addEventListener(evt, (e) => {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+  });
+});
+dropZone.addEventListener('drop', (e) => {
+  const text = e.dataTransfer?.getData('text');
+  if (text) {
+    $('#data').value = normalizeInput(text);
+    updateFieldStates();
+    showToast('Dropped — press Decrypt or Ctrl+Enter');
+  }
+});
+
 historyList.addEventListener('click', (e) => {
   const loadBtn = e.target.closest('.history-load');
   const removeBtn = e.target.closest('.history-remove');
@@ -241,24 +374,42 @@ historyList.addEventListener('click', (e) => {
     return;
   }
   if (removeBtn) {
-    removeHistoryEntry(removeBtn.dataset.id);
+    const id = removeBtn.dataset.id;
+    removeHistoryEntry(id);
+    if (activeHistoryId === id) activeHistoryId = null;
     renderHistory();
-    showToast('Removed');
+    showToast('Removed from history');
   }
 });
 
 clearHistoryBtn.addEventListener('click', () => {
   clearHistory();
+  activeHistoryId = null;
   renderHistory();
   showToast('History cleared');
+});
+
+historyToggle.addEventListener('click', () => {
+  setHistoryOpen(!historyPanel.classList.contains('open'));
 });
 
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
-    $('#decrypt-form').requestSubmit();
+    runDecrypt();
+    return;
+  }
+
+  if (
+    e.key === 'Escape' &&
+    document.activeElement !== $('#key') &&
+    document.activeElement !== $('#data')
+  ) {
+    $('#clear-btn').click();
   }
 });
 
 renderHistory();
+updateFieldStates();
+setStatus('Ready — enter your secret key and encrypted data', 'ready');
 $('#data').focus();

@@ -18,13 +18,14 @@ export function getHistory() {
   return load();
 }
 
-export function addHistoryEntry({ output, inputPreview }) {
+export function addHistoryEntry({ output, input }) {
   const items = load();
   const entry = {
     id: crypto.randomUUID(),
     at: Date.now(),
     output,
-    inputPreview: inputPreview.slice(0, 80),
+    input,
+    inputPreview: input.slice(0, 80),
   };
   items.unshift(entry);
   if (items.length > MAX_ITEMS) items.length = MAX_ITEMS;

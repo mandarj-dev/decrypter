@@ -4,63 +4,85 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="description" content="Decrypt AES-encrypted data in your browser" />
-  <meta name="theme-color" content="#1a1b26" />
-  <title>Decrypter</title>
+  <meta name="theme-color" content="#0c0d10" />
+  <title>Decryption Tool</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
 </head>
 <body>
   <div class="app">
     <header class="header">
-      <h1>Decrypter</h1>
-      <p>AES decryption — runs entirely in your browser</p>
+      <h1>Decryption Tool</h1>
+      <p>Decrypt AES-encrypted data securely in your browser</p>
     </header>
 
-    <main class="main">
-      <section class="panel">
-        <form id="decrypt-form">
-          <label class="field">
-            <span>Secret key</span>
-            <div class="key-row">
-              <input type="password" id="key" autocomplete="off" placeholder="Enter secret key" required />
-              <button type="button" class="btn-text" id="toggle-key">Show</button>
+    <div class="workspace">
+      <div class="grid">
+        <section class="card card-input">
+          <div class="card-header">
+            <h2>Input</h2>
+          </div>
+          <div class="card-body">
+            <form id="decrypt-form">
+              <label class="field">
+                <span>Secret key</span>
+                <div class="key-row">
+                  <input type="password" id="key" autocomplete="off" placeholder="Enter your secret key…" required />
+                  <button type="button" class="btn-icon" id="toggle-key" title="Show/hide key">Show</button>
+                </div>
+              </label>
+
+              <label class="field">
+                <span>Encrypted data (Base64)</span>
+                <div class="drop-zone" id="drop-zone">
+                  <textarea id="data" rows="10" placeholder="Paste encrypted response here…" required></textarea>
+                </div>
+              </label>
+
+              <div class="actions">
+                <button class="btn btn-primary" type="submit" id="decrypt-btn">Decrypt</button>
+                <button class="btn" type="button" id="paste-btn">Paste</button>
+                <button class="btn" type="button" id="clear-btn">Clear</button>
+              </div>
+            </form>
+          </div>
+        </section>
+
+        <section class="card card-output">
+          <div class="card-header">
+            <h2>Decrypted output</h2>
+            <div class="actions actions-toolbar">
+              <button class="btn btn-success" type="button" id="copy-btn" title="Copy (Ctrl+C when focused)">Copy</button>
+              <button class="btn" type="button" id="format-btn">Format</button>
+              <button class="btn" type="button" id="minify-btn">Minify</button>
+              <button class="btn" type="button" id="wrap-btn" aria-pressed="true">Wrap</button>
+              <button class="btn" type="button" id="download-btn">Download</button>
             </div>
-          </label>
-
-          <label class="field">
-            <span>Encrypted data (Base64)</span>
-            <textarea id="data" rows="6" placeholder="Paste encrypted response…" required></textarea>
-          </label>
-
-          <div class="actions">
-            <button class="btn btn-primary" type="submit" id="decrypt-btn">Decrypt</button>
-            <button class="btn" type="button" id="paste-btn">Paste</button>
-            <button class="btn" type="button" id="clear-btn">Clear</button>
           </div>
-        </form>
-      </section>
+          <pre id="output" class="wrap" tabindex="0"><code id="output-code"></code></pre>
+        </section>
+      </div>
 
-      <section class="panel panel-output">
-        <div class="panel-head">
-          <h2>Output</h2>
-          <div class="actions actions-inline">
-            <button class="btn btn-sm" type="button" id="format-btn">Format</button>
-            <button class="btn btn-sm" type="button" id="copy-btn">Copy</button>
-          </div>
-        </div>
-        <pre id="output"><code id="output-code"></code></pre>
-        <p class="status" id="status">Ready</p>
-      </section>
+      <footer class="status-bar" id="status-bar">
+        <span class="status-dot" id="status-dot" aria-hidden="true"></span>
+        <span id="status-text">Ready — enter your secret key and encrypted data</span>
+        <span class="status-hint">Ctrl+Enter to decrypt</span>
+      </footer>
+    </div>
 
-      <section class="panel panel-history">
-        <div class="panel-head">
-          <h2>Session history</h2>
-          <button class="btn btn-sm btn-ghost" type="button" id="clear-history-btn" hidden>Clear</button>
+    <section class="history-panel" id="history-panel">
+      <button type="button" class="history-toggle" id="history-toggle" aria-expanded="false">
+        <span>Session history</span>
+        <span class="history-count" id="history-count">0</span>
+        <span class="history-chevron" aria-hidden="true">▾</span>
+      </button>
+      <div class="history-body" id="history-body" hidden>
+        <div class="history-toolbar">
+          <span class="history-label">Click an entry to restore</span>
+          <button type="button" class="btn btn-sm btn-ghost" id="clear-history-btn" hidden>Clear all</button>
         </div>
-        <ul id="history-list" class="history-list">
-          <li class="history-empty">Decrypted results appear here for this session</li>
-        </ul>
-      </section>
-    </main>
+        <ul id="history-list" class="history-list"></ul>
+      </div>
+    </section>
   </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
