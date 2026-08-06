@@ -97,6 +97,35 @@
     </section>
   </div>
 
+  <button type="button" class="api-drawer-tab" id="api-drawer-tab" aria-controls="api-drawer" aria-expanded="false" title="API route reference">
+    <span class="api-drawer-tab-arrow" aria-hidden="true">‹</span>
+    <span class="api-drawer-tab-label">API Routes</span>
+  </button>
+
+  <div class="api-drawer-backdrop" id="api-drawer-backdrop" hidden></div>
+  <aside class="api-drawer" id="api-drawer" aria-hidden="true" aria-labelledby="api-drawer-title">
+    <header class="api-drawer-header">
+      <div>
+        <h2 id="api-drawer-title">Masked API Routes</h2>
+        <p class="api-drawer-subtitle">Frontend calls → original endpoints</p>
+      </div>
+      <button type="button" class="api-drawer-close" id="api-drawer-close" aria-label="Close">×</button>
+    </header>
+    <div class="api-drawer-body">
+      <table class="api-routes-table">
+        <thead>
+          <tr>
+            <th scope="col">#</th>
+            <th scope="col">Masked route</th>
+            <th scope="col">Method</th>
+            <th scope="col">Original endpoint</th>
+          </tr>
+        </thead>
+        <tbody id="api-routes-tbody"></tbody>
+      </table>
+    </div>
+  </aside>
+
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/src/main.js"></script>
 </body>

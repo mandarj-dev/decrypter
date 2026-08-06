@@ -8,6 +8,7 @@ import {
   clearHistory,
   formatTime,
 } from './history.js';
+import { API_ROUTES } from './apiRoutes.js';
 
 // Remove stale service workers that cache old HTML/CSS/JS.
 if ('serviceWorker' in navigator) {
@@ -33,6 +34,11 @@ const historyBody = $('#history-body');
 const historyToggle = $('#history-toggle');
 const clearHistoryBtn = $('#clear-history-btn');
 const wrapBtn = $('#wrap-btn');
+const apiDrawer = $('#api-drawer');
+const apiDrawerBackdrop = $('#api-drawer-backdrop');
+const apiDrawerTab = $('#api-drawer-tab');
+const apiDrawerClose = $('#api-drawer-close');
+const apiRoutesTbody = $('#api-routes-tbody');
 
 let busy = false;
 let activeHistoryId = null;
@@ -159,6 +165,65 @@ function setHistoryOpen(open) {
   historyPanel.classList.toggle('open', open);
   historyBody.hidden = !open;
   historyToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+}
+
+function methodBadgeClass(method) {
+  return method === 'GET' ? 'method-get' : 'method-post';
+}
+
+function renderApiRoutes(highlightMasked = '') {
+  apiRoutesTbody.innerHTML = API_ROUTES.map((route, index) => {
+    const highlighted = highlightMasked && route.masked.includes(highlightMasked);
+    return `
+      <tr class="${highlighted ? 'highlight' : ''}" data-masked="${escapeHtml(route.masked)}">
+        <td>${index + 1}</td>
+        <td><code class="api-route-masked">${escapeHtml(route.masked)}</code></td>
+        <td><span class="method-badge ${methodBadgeClass(route.method)}">${route.method}</span></td>
+        <td><code class="api-route-original">${escapeHtml(route.original)}</code></td>
+      </tr>`;
+  }).join('');
+}
+
+function setApiDrawerOpen(open, { highlight = '' } = {}) {
+  apiDrawer.classList.toggle('open', open);
+  apiDrawerBackdrop.hidden = !open;
+  apiDrawerBackdrop.classList.toggle('show', open);
+  apiDrawer.setAttribute('aria-hidden', open ? 'false' : 'true');
+  apiDrawerTab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  document.body.style.overflow = open ? 'hidden' : '';
+
+  if (open) {
+    renderApiRoutes(highlight);
+    if (highlight) {
+      requestAnimationFrame(() => {
+        const row = apiRoutesTbody.querySelector('.highlight');
+        row?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+      });
+    }
+    apiDrawerClose.focus();
+  }
+}
+
+function parseApiDrawerHash() {
+  const hash = location.hash.slice(1);
+  if (!hash) return { open: false };
+
+  if (hash === 'api-routes') return { open: true };
+  if (hash.startsWith('api-routes/')) {
+    return { open: true, highlight: decodeURIComponent(hash.slice('api-routes/'.length)) };
+  }
+
+  // e.g. #calculate-refund-shopify opens drawer and highlights matching route
+  if (hash.includes('calculate-refund') || hash.startsWith('api/')) {
+    return { open: true, highlight: decodeURIComponent(hash.replace(/^api\//, '')) };
+  }
+
+  return { open: false };
+}
+
+function syncApiDrawerFromHash() {
+  const { open, highlight = '' } = parseApiDrawerHash();
+  setApiDrawerOpen(open, { highlight });
 }
 
 function renderHistory() {
@@ -410,10 +475,39 @@ historyToggle.addEventListener('click', () => {
   setHistoryOpen(!historyPanel.classList.contains('open'));
 });
 
+apiDrawerTab.addEventListener('click', () => {
+  const opening = !apiDrawer.classList.contains('open');
+  if (opening) {
+    history.replaceState(null, '', '#api-routes');
+    setApiDrawerOpen(true);
+  } else {
+    history.replaceState(null, '', location.pathname);
+    setApiDrawerOpen(false);
+  }
+});
+
+apiDrawerClose.addEventListener('click', () => {
+  history.replaceState(null, '', location.pathname);
+  setApiDrawerOpen(false);
+});
+
+apiDrawerBackdrop.addEventListener('click', () => {
+  history.replaceState(null, '', location.pathname);
+  setApiDrawerOpen(false);
+});
+
+window.addEventListener('hashchange', syncApiDrawerFromHash);
+
 document.addEventListener('keydown', (e) => {
   if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
     e.preventDefault();
     runDecrypt();
+    return;
+  }
+
+  if (e.key === 'Escape' && apiDrawer.classList.contains('open')) {
+    history.replaceState(null, '', location.pathname);
+    setApiDrawerOpen(false);
     return;
   }
 
@@ -427,6 +521,8 @@ document.addEventListener('keydown', (e) => {
 });
 
 renderHistory();
+renderApiRoutes();
+syncApiDrawerFromHash();
 updateFieldStates();
 setStatus('Ready — enter your secret key and encrypted data', 'ready');
 $('#data').focus();
