@@ -1741,7 +1741,9 @@ body.mode-decrypt #mode-logs-panel {
 
 .lv-pre-raw {
   max-height: 420px;
+  max-width: 100%;
   white-space: pre;
+  overflow-x: auto;
 }
 
 .log-entry-order {

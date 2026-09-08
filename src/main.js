@@ -576,6 +576,8 @@ function renderLogViewer(entry) {
     logViewerBody.hidden = false;
     logViewerBody.innerHTML = `<div class="detail">${header}${sections}</div>`;
   }
+  const logViewer = $('#log-viewer');
+  if (logViewer) logViewer.scrollTop = 0;
   updateLogNav();
 }
 
@@ -1136,9 +1138,26 @@ function selectLogEntry(id, { rebuildList = false } = {}) {
   );
 
   requestAnimationFrame(() => {
-    const btn = logEntryList.querySelector(`.log-entry-btn[data-id="${CSS.escape(id)}"]`);
-    btn?.closest('.log-entry-item')?.scrollIntoView({ block: 'nearest' });
+    scrollActiveLogIntoList(id);
   });
+}
+
+/** Scroll list item into view without scrolling page ancestors. */
+function scrollActiveLogIntoList(id) {
+  const scroller = logEntryList;
+  if (!scroller) return;
+  const item = scroller.querySelector(`.log-entry-btn[data-id="${CSS.escape(id)}"]`)?.closest('.log-entry-item');
+  if (!item) return;
+
+  const itemRect = item.getBoundingClientRect();
+  const scrollerRect = scroller.getBoundingClientRect();
+  const pad = 8;
+
+  if (itemRect.top < scrollerRect.top + pad) {
+    scroller.scrollTop -= scrollerRect.top + pad - itemRect.top;
+  } else if (itemRect.bottom > scrollerRect.bottom - pad) {
+    scroller.scrollTop += itemRect.bottom - (scrollerRect.bottom - pad);
+  }
 }
 
 function markActiveEntryInDom(id) {

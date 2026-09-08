@@ -25,12 +25,30 @@
   --border2: #323846;
 }
 
-body.mode-logs .app-shell {
-  height: calc(100vh - var(--header-h) - var(--nav-h));
+html:has(body.mode-logs) {
+  overflow: hidden;
+  height: 100%;
 }
 
-body.mode-logs .logs-app {
+body.mode-logs {
+  overflow: hidden;
+  height: 100vh;
+}
+
+body.mode-logs .app-shell {
+  height: calc(100vh - var(--header-h) - var(--nav-h));
+  min-height: 0;
+  overflow: hidden;
+}
+
+body.mode-logs .logs-app,
+body.mode-logs .workspace-panel.logs-workspace {
   height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
 /* Keep legacy chrome rules inert */
@@ -44,7 +62,17 @@ body.mode-logs .logs-app {
 }
 
 .logs-main {
-  grid-template-columns: minmax(300px, 410px) 1fr;
+  grid-template-columns: minmax(300px, 410px) minmax(0, 1fr);
+  min-height: 0;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.logs-sidebar,
+.logs-detail {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
 }
 
 .logs-main:not(.has-content) {
@@ -344,6 +372,8 @@ body.mode-logs .logs-app {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
   padding: 0;
   display: flex;
   flex-direction: column;
@@ -689,7 +719,9 @@ body.mode-logs .logs-app {
 .log-viewer {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   padding: 1.25rem 1.35rem 1.75rem;
 }
 
@@ -699,7 +731,8 @@ body.mode-logs .logs-app {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  min-height: 50vh;
+  min-height: 0;
+  height: 100%;
   color: var(--dim);
   gap: 10px;
   font-style: normal;
@@ -716,6 +749,8 @@ body.mode-logs .logs-app {
   flex-direction: column;
   gap: 0.75rem;
   max-width: 920px;
+  width: 100%;
+  min-width: 0;
   margin: 0 auto;
 }
 
@@ -723,6 +758,8 @@ body.mode-logs .logs-app {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lv-header,
@@ -880,6 +917,8 @@ body.mode-logs .logs-app {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   overflow: hidden;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lv-accordion > summary {
@@ -1137,6 +1176,13 @@ body.mode-logs .logs-app {
   flex-direction: column;
   gap: 0.85rem;
   padding-top: 0.75rem;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.lv-raw-block {
+  min-width: 0;
+  max-width: 100%;
 }
 
 .lv-raw-toolbar {
@@ -1174,7 +1220,10 @@ body.mode-logs .logs-app {
   margin: 0;
   padding: 0.85rem;
   max-height: 320px;
+  max-width: 100%;
+  min-width: 0;
   overflow: auto;
+  overscroll-behavior: contain;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1183,6 +1232,7 @@ body.mode-logs .logs-app {
   line-height: 1.55;
   white-space: pre-wrap;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--muted);
   scrollbar-width: thin;
   scrollbar-color: rgba(255, 255, 255, 0.16) transparent;
@@ -1206,7 +1256,9 @@ body.mode-logs .logs-app {
 
 .lv-pre-raw {
   max-height: 420px;
+  max-width: 100%;
   white-space: pre;
+  overflow-x: auto;
 }
 
 .kv-grid {
