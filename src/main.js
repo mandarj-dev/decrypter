@@ -25,6 +25,7 @@ import { API_ROUTES } from './apiRoutes.js';
 import { parseApiLogs, decryptLogEntry } from './logParser.js';
 import { buildLogView, kindLabel } from './logView.js';
 import { enrichLogEntry, getCachedView } from './logEnrich.js';
+import { buildLogSummary, buildFilterOptions } from './logSummary.js';
 
 // Remove stale service workers that cache old HTML/CSS/JS.
 if ('serviceWorker' in navigator) {
@@ -67,6 +68,19 @@ const logStatusText = $('#log-status-text');
 const logParseBtn = $('#log-parse-btn');
 const logClearBtn = $('#log-clear-btn');
 const logFilter = $('#log-filter');
+const logStatusFilter = $('#log-status-filter');
+const logHostFilter = $('#log-host-filter');
+const logClientFilter = $('#log-client-filter');
+const logAdvancedFilters = $('#log-advanced-filters');
+const logFiltersClear = $('#log-filters-clear');
+const logInsights = $('#log-insights');
+const logInsightsMeta = $('#log-insights-meta');
+const logInsightsBody = $('#log-insights-body');
+const logsAlert = $('#logs-alert');
+const logsAlertTitle = $('#logs-alert-title');
+const logsAlertText = $('#logs-alert-text');
+const logsAlertActions = $('#logs-alert-actions');
+const logsAlertDismiss = $('#logs-alert-dismiss');
 const logsMain = $('#logs-main');
 const logsEmptyState = $('#logs-empty-state');
 const logsDetail = $('#logs-detail');
@@ -96,6 +110,12 @@ let activeLogId = null;
 let outcomeFilter = 'all';
 /** @type {'all' | 'return' | 'exchange' | 'pay' | 'status' | 'failed'} */
 let kindFilter = 'all';
+/** @type {string} */
+let statusCodeFilter = 'all';
+/** @type {string} */
+let hostFilter = 'all';
+/** @type {string} */
+let clientFilter = 'all';
 /** @type {Set<string>} */
 const collapsedGroups = new Set();
 /** @type {Set<string>} */
@@ -308,14 +328,14 @@ function renderKvRow(label, value, cls = '') {
 
 function renderTimeline(steps) {
   return `
-    <div class="lv-timeline timeline-strip">
+    <div class="lv-timeline" role="list">
       ${steps
         .map(
           (step, i) => `
-        <div class="lv-step tl-step${step.done ? ' done' : ''}${step.failed ? ' failed' : ''}">
-          ${i > 0 ? `<span class="lv-step-line tl-connector${steps[i - 1]?.done && step.done ? ' done' : ''}" aria-hidden="true"></span>` : ''}
-          <span class="lv-step-dot tl-dot-outer" aria-hidden="true"></span>
-          <span class="lv-step-label tl-label">${escapeHtml(step.label)}</span>
+        <div class="lv-step${step.done ? ' done' : ''}${step.failed ? ' failed' : ''}" role="listitem">
+          ${i > 0 ? `<span class="lv-step-line${steps[i - 1]?.done ? ' done' : ''}${steps[i - 1]?.failed ? ' failed' : ''}" aria-hidden="true"></span>` : ''}
+          <span class="lv-step-dot" aria-hidden="true">${step.failed ? '!' : step.done ? '✓' : ''}</span>
+          <span class="lv-step-label">${escapeHtml(step.label)}</span>
         </div>`
         )
         .join('')}
@@ -355,20 +375,27 @@ function renderRefund(refund) {
     ['Discount', refund.discount],
     ['Tax', refund.tax],
     ['Reverse fees', refund.reverseFees],
-    ['Return total', refund.total],
   ].filter(([, v]) => v != null);
 
   return `
     <div class="lv-refund">
       ${rows
         .map(
-          ([label, value], i) => `
-        <div class="lv-refund-row${i === rows.length - 1 ? ' total' : ''}">
+          ([label, value]) => `
+        <div class="lv-refund-row">
           <span>${escapeHtml(label)}</span>
           <strong>${escapeHtml(value)}</strong>
         </div>`
         )
         .join('')}
+      ${
+        refund.total
+          ? `<div class="lv-refund-row total">
+          <span>Return total</span>
+          <strong>${escapeHtml(refund.total)}</strong>
+        </div>`
+          : ''
+      }
       ${
         refund.mode
           ? `<div class="lv-refund-mode">Refund mode: <strong>${escapeHtml(refund.mode)}</strong>${
@@ -403,11 +430,40 @@ function renderLogViewer(entry) {
   const statusPillClass = ok ? 'ok' : 'err';
   const typeClass =
     view.kind === 'pay' ? 'payment' : view.kind === 'status' ? 'payment-status' : view.kind;
+  const isPaymentKind = view.kind === 'pay' || view.kind === 'status';
+  const hostLabel = entry.host || '';
+
+  const metaBits = [
+    view.timestamp
+      ? `<span class="lv-meta-chip"><span class="lv-meta-k">Time</span><span class="lv-meta-v">${escapeHtml(view.timestamp)}</span></span>`
+      : '',
+    view.endpoint
+      ? `<span class="lv-meta-chip"><span class="lv-meta-k">Endpoint</span><span class="lv-meta-v"><code>${escapeHtml(view.endpoint)}</code></span></span>`
+      : '',
+    view.pickupDate && view.pickupDate !== '—'
+      ? `<span class="lv-meta-chip"><span class="lv-meta-k">Pickup</span><span class="lv-meta-v">${escapeHtml(view.pickupDate)}</span></span>`
+      : '',
+    hostLabel
+      ? `<span class="lv-meta-chip"><span class="lv-meta-k">Host</span><span class="lv-meta-v">${escapeHtml(hostLabel)}</span></span>`
+      : '',
+    view.storeUrl
+      ? `<span class="lv-meta-chip"><span class="lv-meta-k">Store</span><span class="lv-meta-v"><a href="${escapeHtml(view.storeUrl)}" target="_blank" rel="noopener">Open store</a></span></span>`
+      : '',
+  ]
+    .filter(Boolean)
+    .join('');
 
   const header = `
-    <header class="lv-header detail-header">
+    <header class="lv-header detail-header lv-hero">
       <div class="lv-title-row detail-header-top">
-        <h2 class="lv-title detail-order">${escapeHtml(view.title)}</h2>
+        <div class="lv-hero-text">
+          <h2 class="lv-title detail-order">${escapeHtml(view.title)}</h2>
+          ${
+            view.statusMessage
+              ? `<p class="lv-status-msg">${escapeHtml(view.statusMessage)}</p>`
+              : ''
+          }
+        </div>
         <div class="lv-badges">
           <span class="lv-badge status-pill ${statusPillClass}">${ok ? '✓ ' : '✗ '}${escapeHtml(outcomeLabel)}</span>
           ${
@@ -416,24 +472,10 @@ function renderLogViewer(entry) {
               : ''
           }
           <span class="lv-badge type-pill ${escapeHtml(typeClass)}">${escapeHtml(kind)}</span>
-          ${view.encrypted ? '<span class="lv-badge lv-badge-enc">still encrypted</span>' : ''}
+          ${view.encrypted ? '<span class="lv-badge lv-badge-enc">encrypted</span>' : ''}
         </div>
       </div>
-      ${
-        view.statusMessage
-          ? `<p class="lv-status-msg">${escapeHtml(view.statusMessage)}</p>`
-          : ''
-      }
-      <div class="lv-meta detail-meta">
-        <div class="meta-item"><div class="ml lv-meta-label">Timestamp</div><div class="mv">${escapeHtml(view.timestamp)}</div></div>
-        <div class="meta-item"><div class="ml lv-meta-label">Endpoint</div><div class="mv"><code>${escapeHtml(view.endpoint)}</code></div></div>
-        <div class="meta-item"><div class="ml lv-meta-label">Pickup date</div><div class="mv">${escapeHtml(view.pickupDate)}</div></div>
-        <div class="meta-item"><div class="ml lv-meta-label">Store URL</div><div class="mv">${
-          view.storeUrl
-            ? `<a href="${escapeHtml(view.storeUrl)}" target="_blank" rel="noopener">${escapeHtml(view.storeUrl)}</a>`
-            : '—'
-        }</div></div>
-      </div>
+      ${metaBits ? `<div class="lv-meta-bar">${metaBits}</div>` : ''}
     </header>`;
 
   const payment = view.payment;
@@ -483,41 +525,41 @@ function renderLogViewer(entry) {
               ${renderKvRow('Gateway Signature', payment.signature || '—')}
               ${renderKvRow('Generated Signature', payment.generatedSignature || '—')}
             </div>`,
-            { open: true, id: 'sig' }
+            { open: !payment.sigMatch, id: 'sig' }
           ),
         ].join('')
       : '';
 
   const responseSummary = `
     <div class="lv-response-summary outcome-${view.outcome}">
-      <div class="lv-response-kicker">
-        <span class="lv-meta-label">Status</span>
-        <span class="lv-badge status-pill ${statusPillClass}">${escapeHtml(outcomeLabel)}</span>
-        ${
-          view.statusCode != null
-            ? `<span class="lv-badge lv-badge-code">HTTP ${escapeHtml(String(view.statusCode))}</span>`
-            : ''
-        }
-      </div>
-      ${
-        view.statusMessage
-          ? `<p class="lv-response-message">${escapeHtml(view.statusMessage)}</p>`
-          : '<p class="lv-muted">No response message</p>'
-      }
       <pre class="lv-pre lv-pre-compact raw-box"><code>${prettyJsonHtml(view.response)}</code></pre>
     </div>`;
 
-  const sections = [
-    view.kind === 'pay' || view.kind === 'status' ? '' : renderAccordion('Response', responseSummary, { open: true, id: 'response' }),
-    paymentSection,
-    statusSection,
-    view.kind === 'pay' || view.kind === 'status'
-      ? ''
-      : renderAccordion('Request Timeline', renderTimeline(view.timeline), { open: true, id: 'timeline' }),
+  const responseBlock = isPaymentKind
+    ? ''
+    : renderAccordion('Response JSON', responseSummary, { open: !ok, id: 'response' });
+
+  const timelinePanel = isPaymentKind
+    ? ''
+    : `<section class="lv-panel lv-timeline-panel">
+        <div class="lv-panel-label">Request timeline</div>
+        ${renderTimeline(view.timeline)}
+      </section>`;
+
+  const productNotes = view.products
+    .map((p) => p.note)
+    .filter(Boolean)
+    .join('; ');
+  const notesDuplicate =
+    view.notes &&
+    productNotes &&
+    view.notes.trim().toLowerCase() === productNotes.trim().toLowerCase();
+
+  const orderCol = [
     view.products.length
       ? renderAccordion('Product Details', renderProducts(view.products), { open: true, id: 'products' })
       : '',
-    view.notes
+    view.notes && !notesDuplicate
       ? renderAccordion('Customer Notes', `<div class="lv-notes notes-box">${escapeHtml(view.notes)}</div>`, {
           open: true,
           id: 'notes',
@@ -527,11 +569,17 @@ function renderLogViewer(entry) {
       ? renderAccordion('Refund Summary', renderRefund(view.refund), { open: true, id: 'refund' })
       : '',
     view.address
-      ? renderAccordion('Pickup Address', renderAddress(view.address), { open: true, id: 'address' })
+      ? renderAccordion('Pickup Address', renderAddress(view.address), { open: false, id: 'address' })
       : '',
-    renderAccordion(
-      'Raw Payload',
-      `<div class="lv-raw">
+  ]
+    .filter(Boolean)
+    .join('');
+
+  const techCol = [paymentSection, statusSection, responseBlock].filter(Boolean).join('');
+
+  const rawBlock = renderAccordion(
+    'Raw Payload',
+    `<div class="lv-raw">
         <div class="lv-raw-toolbar">
           ${renderRawCopyBtn('raw', 'Copy raw log')}
           ${renderRawCopyBtn('formatted', 'Copy formatted')}
@@ -565,16 +613,28 @@ function renderLogViewer(entry) {
           <pre class="lv-pre lv-pre-raw raw-box"><code>${escapeHtml(rawText)}</code></pre>
         </div>
       </div>`,
-      { open: false, id: 'raw' }
-    ),
-  ]
-    .filter(Boolean)
-    .join('');
+    { open: false, id: 'raw' }
+  );
+
+  const hasOrder = Boolean(orderCol);
+  const hasTech = Boolean(techCol);
 
   if (logViewerEmpty) logViewerEmpty.hidden = true;
   if (logViewerBody) {
     logViewerBody.hidden = false;
-    logViewerBody.innerHTML = `<div class="detail">${header}${sections}</div>`;
+    logViewerBody.innerHTML = `<div class="detail">
+      ${header}
+      ${timelinePanel}
+      ${
+        hasOrder || hasTech
+          ? `<div class="lv-columns${hasOrder && hasTech ? '' : ' lv-columns-single'}">
+        ${hasOrder ? `<div class="lv-col lv-col-order">${orderCol}</div>` : ''}
+        ${hasTech ? `<div class="lv-col lv-col-tech">${techCol}</div>` : ''}
+      </div>`
+          : ''
+      }
+      ${rawBlock}
+    </div>`;
   }
   const logViewer = $('#log-viewer');
   if (logViewer) logViewer.scrollTop = 0;
@@ -595,8 +655,39 @@ function setStatus(msg, type = 'ready') {
 }
 
 function setLogStatus(msg, type = 'ready') {
-  logStatusText.textContent = msg;
-  logStatusBar.className = 'status-bar' + (type ? ` ${type}` : '');
+  if (logStatusText) logStatusText.textContent = msg;
+  if (logStatusBar) logStatusBar.className = 'status-bar' + (type ? ` ${type}` : '');
+}
+
+/**
+ * Persistent alert banner for log reader errors / warnings / guidance.
+ * @param {{ title: string, text?: string, type?: 'info'|'success'|'warning'|'error', actions?: Array<{id:string,label:string,primary?:boolean}> }} opts
+ */
+function setLogsAlert({ title, text = '', type = 'info', actions = [] } = {}) {
+  if (!logsAlert) return;
+  logsAlert.hidden = false;
+  logsAlert.className = `lr-alert is-${type}`;
+  if (logsAlertTitle) logsAlertTitle.textContent = title || '';
+  if (logsAlertText) {
+    logsAlertText.textContent = text || '';
+    logsAlertText.hidden = !text;
+  }
+  if (logsAlertActions) {
+    logsAlertActions.innerHTML = actions
+      .map(
+        (a) =>
+          `<button type="button" class="btn btn-sm${a.primary ? ' btn-primary' : ''}" data-alert-action="${escapeAttr(
+            a.id
+          )}">${escapeHtml(a.label)}</button>`
+      )
+      .join('');
+  }
+}
+
+function clearLogsAlert() {
+  if (!logsAlert) return;
+  logsAlert.hidden = true;
+  if (logsAlertActions) logsAlertActions.innerHTML = '';
 }
 
 function setBusy(loading) {
@@ -1007,6 +1098,11 @@ function addLogFiles(fileList) {
       !f.type
   );
   if (accepted.length === 0) {
+    setLogsAlert({
+      title: 'Unsupported file type',
+      text: 'Only .txt and .log files are accepted.',
+      type: 'error',
+    });
     showToast('Please drop .txt or .log files');
     return;
   }
@@ -1018,6 +1114,12 @@ function addLogFiles(fileList) {
   updateLogFileUi();
   showToast(`Added ${accepted.length} file${accepted.length === 1 ? '' : 's'}`);
   setLogStatus(`${uploadedFiles.size} file(s) ready — click Parse Logs`, 'info');
+  setLogsAlert({
+    title: `${uploadedFiles.size} file${uploadedFiles.size === 1 ? '' : 's'} ready`,
+    text: 'Add a secret key if needed, then parse to decrypt and inspect entries.',
+    type: 'info',
+    actions: [{ id: 'parse', label: 'Parse now', primary: true }],
+  });
 }
 
 function entryMatchesFilter(entry, q) {
@@ -1036,6 +1138,8 @@ function entryMatchesFilter(entry, q) {
     entry.productPreview,
     entry.responsePreview,
     entry.host,
+    entry.clientName,
+    entry.issueLabel,
   ]
     .join(' ')
     .toLowerCase();
@@ -1048,7 +1152,21 @@ function entryMatchesKind(entry) {
   return entry.kind === kindFilter;
 }
 
-function filteredEntries() {
+function entryMatchesFacets(entry) {
+  if (statusCodeFilter !== 'all') {
+    const key = entry.statusCode == null ? 'none' : String(entry.statusCode);
+    if (key !== statusCodeFilter) return false;
+  }
+  if (hostFilter !== 'all' && (entry.host || 'unknown') !== hostFilter) return false;
+  if (clientFilter !== 'all') {
+    const client = entry.clientName || entry.host || 'Unknown';
+    if (client !== clientFilter) return false;
+  }
+  return true;
+}
+
+/** Entries after outcome/kind/search — used for insights + facet options. */
+function facetBaseEntries() {
   const q = (logFilter.value || '').trim().toLowerCase();
   return logEntries.filter((e) => {
     if (outcomeFilter === 'pay') {
@@ -1059,6 +1177,147 @@ function filteredEntries() {
     if (!entryMatchesKind(e)) return false;
     return entryMatchesFilter(e, q);
   });
+}
+
+function filteredEntries() {
+  return facetBaseEntries().filter(entryMatchesFacets);
+}
+
+function escapeAttr(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/"/g, '&quot;')
+    .replace(/</g, '&lt;');
+}
+
+function fillSelectOptions(select, values, { allLabel, formatLabel } = {}) {
+  if (!select) return;
+  const current = select.value || 'all';
+  const opts = [`<option value="all">${escapeHtml(allLabel || 'All')}</option>`];
+  for (const value of values) {
+    const label = formatLabel ? formatLabel(value) : value === 'none' ? 'No status' : value;
+    opts.push(`<option value="${escapeAttr(value)}">${escapeHtml(label)}</option>`);
+  }
+  select.innerHTML = opts.join('');
+  select.value = values.includes(current) || current === 'all' ? current : 'all';
+  if (select.value !== current && current !== 'all') {
+    // keep selection if still valid after rebuild
+  }
+}
+
+function renderInsightChips(items, { facet, errorTone = false } = {}) {
+  if (!items.length) return '<p class="log-insight-empty">None</p>';
+  return `<div class="log-insight-chips">${items
+    .map(({ label, count }) => {
+      const value = label === '—' ? 'none' : label;
+      const active =
+        (facet === 'status' && statusCodeFilter === value) ||
+        (facet === 'host' && hostFilter === label) ||
+        (facet === 'client' && clientFilter === label);
+      return `<button type="button" class="log-insight-chip${active ? ' active' : ''}${
+        errorTone ? ' is-error' : ''
+      }" data-facet="${escapeAttr(facet)}" data-value="${escapeAttr(
+        facet === 'status' ? value : label
+      )}" title="${escapeAttr(label)}">
+        <span class="chip-label">${escapeHtml(label === 'none' ? 'No status' : label)}</span>
+        <span class="chip-count">${count}</span>
+      </button>`;
+    })
+    .join('')}</div>`;
+}
+
+function renderLogInsights() {
+  const hasLogs = logEntries.length > 0;
+  if (!hasLogs) {
+    if (logInsightsBody) logInsightsBody.innerHTML = '';
+    if (logInsightsMeta) logInsightsMeta.textContent = '';
+    return;
+  }
+
+  const base = facetBaseEntries();
+  const summary = buildLogSummary(base);
+  const options = buildFilterOptions(base);
+
+  fillSelectOptions(logStatusFilter, options.statuses, {
+    allLabel: 'Status',
+    formatLabel: (v) => (v === 'none' ? 'No status' : v),
+  });
+  fillSelectOptions(logHostFilter, options.hosts, { allLabel: 'Host' });
+  fillSelectOptions(logClientFilter, options.clients, { allLabel: 'Client' });
+
+  // Re-apply current facet filters if still present in options
+  if (logStatusFilter && statusCodeFilter !== 'all') {
+    if ([...logStatusFilter.options].some((o) => o.value === statusCodeFilter)) {
+      logStatusFilter.value = statusCodeFilter;
+    } else {
+      statusCodeFilter = 'all';
+      logStatusFilter.value = 'all';
+    }
+  }
+  if (logHostFilter && hostFilter !== 'all') {
+    if ([...logHostFilter.options].some((o) => o.value === hostFilter)) {
+      logHostFilter.value = hostFilter;
+    } else {
+      hostFilter = 'all';
+      logHostFilter.value = 'all';
+    }
+  }
+  if (logClientFilter && clientFilter !== 'all') {
+    if ([...logClientFilter.options].some((o) => o.value === clientFilter)) {
+      logClientFilter.value = clientFilter;
+    } else {
+      clientFilter = 'all';
+      logClientFilter.value = 'all';
+    }
+  }
+
+  if (logInsightsMeta) {
+    logInsightsMeta.textContent = summary.error
+      ? `${summary.error} failed · ${summary.uniqueIssueClients} clients`
+      : `${summary.total} shown · ${summary.uniqueClients} clients`;
+  }
+
+  if (!logInsightsBody) return;
+
+  const blocks = [
+    {
+      label: 'Status codes',
+      html: renderInsightChips(summary.statusCodes, { facet: 'status' }),
+    },
+    {
+      label: summary.error ? `Clients with issues (${summary.uniqueIssueClients})` : 'Top clients',
+      html: renderInsightChips(summary.error ? summary.issueClients : summary.clients, {
+        facet: 'client',
+        errorTone: Boolean(summary.error),
+      }),
+    },
+    {
+      label: 'Hosts',
+      html: renderInsightChips(summary.hosts, { facet: 'host' }),
+    },
+  ];
+
+  if (summary.topMessages.length) {
+    blocks.push({
+      label: 'Top error messages',
+      html: renderInsightChips(summary.topMessages, { facet: 'message', errorTone: true }),
+    });
+  }
+  if (summary.errorEndpoints.length) {
+    blocks.push({
+      label: 'Failing endpoints',
+      html: renderInsightChips(summary.errorEndpoints, { facet: 'endpoint' }),
+    });
+  }
+
+  logInsightsBody.innerHTML = blocks
+    .map(
+      (b) => `<div class="log-insight-block">
+      <div class="log-insight-label">${escapeHtml(b.label)}</div>
+      ${b.html}
+    </div>`
+    )
+    .join('');
 }
 
 function updateOutcomeCounts() {
@@ -1235,6 +1494,7 @@ function renderLogEntries() {
   logEntryCount.textContent = String(items.length);
   updateOutcomeCounts();
   updateSelectionUi();
+  renderLogInsights();
 
   const fileNames = [...uploadedFiles.keys()];
   const grouped = groupEntriesBySource(items);
@@ -1249,12 +1509,16 @@ function renderLogEntries() {
   }
 
   if (fileNames.length === 0 && logEntries.length === 0) {
-    logEntryList.innerHTML = '<div class="log-empty">Upload API log files to get started</div>';
+    logEntryList.innerHTML =
+      '<div class="log-empty">Upload and parse log files to begin</div>';
     return;
   }
 
   if (orderedNames.length === 0 || (items.length === 0 && logEntries.length > 0)) {
-    logEntryList.innerHTML = '<div class="log-empty">No entries match this filter</div>';
+    logEntryList.innerHTML = `<div class="lr-empty-filter">
+      <p>No logs match the current filters. Try clearing search or facet filters.</p>
+      <button type="button" class="btn btn-sm" id="log-empty-reset">Clear filters</button>
+    </div>`;
     return;
   }
 
@@ -1311,6 +1575,12 @@ function renderLogEntries() {
 
 async function parseAndDecryptLogs() {
   if (uploadedFiles.size === 0) {
+    setLogsAlert({
+      title: 'Nothing to parse',
+      text: 'Upload at least one .txt or .log file first.',
+      type: 'warning',
+      actions: [{ id: 'upload', label: 'Upload', primary: true }],
+    });
     showToast('Upload log files first');
     return;
   }
@@ -1319,6 +1589,11 @@ async function parseAndDecryptLogs() {
   logParseBtn.disabled = true;
   logParseBtn.classList.add('loading');
   setLogStatus('Parsing log files…', 'info');
+  setLogsAlert({
+    title: 'Parsing logs…',
+    text: 'Decrypting payloads and classifying outcomes.',
+    type: 'info',
+  });
 
   try {
     await new Promise((r) => setTimeout(r, 30));
@@ -1332,6 +1607,22 @@ async function parseAndDecryptLogs() {
         .map((entry) => enrichLogEntry(decryptLogEntry(entry, secretKey)))
         .sort((a, b) => String(a.timestamp).localeCompare(String(b.timestamp)));
       all.push(...decrypted);
+    }
+
+    if (!all.length) {
+      logEntries = [];
+      activeLogId = null;
+      renderLogEntries();
+      clearLogViewer();
+      setLogsAlert({
+        title: 'No log entries found',
+        text: 'These files did not contain recognizable API request/response blocks.',
+        type: 'warning',
+        actions: [{ id: 'clear', label: 'Clear files' }],
+      });
+      setLogStatus('No entries parsed', 'warning');
+      showToast('No log entries found');
+      return;
     }
 
     logEntries = all;
@@ -1366,8 +1657,49 @@ async function parseAndDecryptLogs() {
 
     setLogStatus(msg, errorCount ? 'error' : 'success');
     showToast(`Loaded ${all.length} log entries`);
+
+    if (!secretKey && encryptedLeft > 0) {
+      setLogsAlert({
+        title: `${encryptedLeft} payload${encryptedLeft === 1 ? '' : 's'} still encrypted`,
+        text: `Loaded ${all.length} entries (${errorCount} failed). Add a secret key and parse again to decrypt.`,
+        type: 'warning',
+        actions: [
+          { id: 'focus-key', label: 'Focus key' },
+          { id: 'show-failed', label: 'Show failed', primary: true },
+        ],
+      });
+    } else if (failedTotal > 0) {
+      setLogsAlert({
+        title: `${failedTotal} decrypt failure${failedTotal === 1 ? '' : 's'}`,
+        text: `Parsed ${all.length} entries · ${errorCount} request failures. Check the key or inspect Failed filter.`,
+        type: 'warning',
+        actions: [{ id: 'show-failed', label: 'Show failed', primary: true }],
+      });
+    } else if (errorCount > 0) {
+      setLogsAlert({
+        title: `${errorCount} failed request${errorCount === 1 ? '' : 's'}`,
+        text: `Parsed ${all.length} entries successfully. Open Insights or filter Failed to triage.`,
+        type: 'error',
+        actions: [
+          { id: 'show-failed', label: 'Show failed', primary: true },
+          { id: 'open-insights', label: 'Open insights' },
+        ],
+      });
+    } else {
+      setLogsAlert({
+        title: `Loaded ${all.length} log entries`,
+        text: `${successCount} succeeded · use filters and Insights to explore.`,
+        type: 'success',
+      });
+    }
   } catch (err) {
     setLogStatus(err.message || 'Failed to parse logs', 'error');
+    setLogsAlert({
+      title: 'Parse failed',
+      text: err.message || 'Could not read or parse the uploaded log files.',
+      type: 'error',
+      actions: [{ id: 'retry-parse', label: 'Retry', primary: true }],
+    });
     showToast('Failed to parse logs');
   } finally {
     logParseBtn.disabled = uploadedFiles.size === 0;
@@ -1382,12 +1714,20 @@ function clearLogs() {
   activeLogId = null;
   outcomeFilter = 'all';
   kindFilter = 'all';
+  statusCodeFilter = 'all';
+  hostFilter = 'all';
+  clientFilter = 'all';
   collapsedGroups.clear();
   selectedLogIds.clear();
   logFilter.value = '';
+  if (logStatusFilter) logStatusFilter.value = 'all';
+  if (logHostFilter) logHostFilter.value = 'all';
+  if (logClientFilter) logClientFilter.value = 'all';
   logFileInput.value = '';
   updateLogFileUi();
   clearLogViewer();
+  renderLogInsights();
+  clearLogsAlert();
   setLogStatus('Ready — upload log files and enter your secret key', 'ready');
   showToast('Cleared logs');
 }
@@ -1809,19 +2149,190 @@ document.querySelector('.log-kind-filters')?.addEventListener('click', (e) => {
   applyListFilters();
 });
 
+function resetFacetFilters() {
+  statusCodeFilter = 'all';
+  hostFilter = 'all';
+  clientFilter = 'all';
+  if (logStatusFilter) logStatusFilter.value = 'all';
+  if (logHostFilter) logHostFilter.value = 'all';
+  if (logClientFilter) logClientFilter.value = 'all';
+}
+
+logStatusFilter?.addEventListener('change', () => {
+  statusCodeFilter = logStatusFilter.value || 'all';
+  applyListFilters();
+});
+
+logHostFilter?.addEventListener('change', () => {
+  hostFilter = logHostFilter.value || 'all';
+  applyListFilters();
+});
+
+logClientFilter?.addEventListener('change', () => {
+  clientFilter = logClientFilter.value || 'all';
+  applyListFilters();
+});
+
+logFiltersClear?.addEventListener('click', () => {
+  resetFacetFilters();
+  applyListFilters();
+});
+
+logsAlertDismiss?.addEventListener('click', () => clearLogsAlert());
+
+logsAlertActions?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-alert-action]');
+  if (!btn) return;
+  const action = btn.dataset.alertAction;
+  if (action === 'upload') {
+    logFileInput?.click();
+  } else if (action === 'parse' || action === 'retry-parse') {
+    parseAndDecryptLogs();
+  } else if (action === 'clear') {
+    clearLogs();
+  } else if (action === 'focus-key') {
+    $('#log-key')?.focus();
+  } else if (action === 'show-failed') {
+    outcomeFilter = 'error';
+    kindFilter = 'failed';
+    applyListFilters();
+    clearLogsAlert();
+  } else if (action === 'open-insights') {
+    if (logInsights) logInsights.open = true;
+    logInsights?.scrollIntoView({ block: 'nearest' });
+  }
+});
+
+logInsightsBody?.addEventListener('click', (e) => {
+  const chip = e.target.closest('.log-insight-chip[data-facet]');
+  if (!chip) return;
+  const facet = chip.dataset.facet;
+  const value = chip.dataset.value || '';
+
+  if (facet === 'status') {
+    statusCodeFilter = statusCodeFilter === value ? 'all' : value;
+    if (logStatusFilter) logStatusFilter.value = statusCodeFilter;
+  } else if (facet === 'host') {
+    hostFilter = hostFilter === value ? 'all' : value;
+    if (logHostFilter) logHostFilter.value = hostFilter;
+  } else if (facet === 'client') {
+    clientFilter = clientFilter === value ? 'all' : value;
+    if (logClientFilter) logClientFilter.value = clientFilter;
+  } else if (facet === 'message' || facet === 'endpoint') {
+    const next = (logFilter.value || '').trim() === value ? '' : value;
+    logFilter.value = next;
+  }
+
+  applyListFilters();
+});
+
 mobileCloseBtn?.addEventListener('click', () => closeLogDetailModal());
 
 function updateLogsClock() {
-  if (!logsClock) return;
-  logsClock.textContent = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
+  if (logsClock) logsClock.textContent = time;
+  const floatClock = $('#float-clock');
+  if (floatClock) floatClock.textContent = time;
 }
 updateLogsClock();
 setInterval(updateLogsClock, 1000);
+
+/* ── Floating chrome ── */
+const floatDock = $('#float-dock');
+const floatChrome = $('#float-chrome');
+const floatFab = $('#float-fab');
+const floatTray = $('#float-tray');
+const floatTrayClose = $('#float-tray-close');
+const floatSlotModes = $('#float-slot-modes');
+const floatSlotLogs = $('#float-slot-logs');
+const workspaceSwitch = $('#workspace-switch');
+const logsToolbarActions = $('#logs-toolbar-actions');
+
+function mountFloatChromeSlots() {
+  if (floatSlotModes && workspaceSwitch && workspaceSwitch.parentElement !== floatSlotModes) {
+    floatSlotModes.appendChild(workspaceSwitch);
+  }
+  if (floatSlotLogs && logsToolbarActions && logsToolbarActions.parentElement !== floatSlotLogs) {
+    floatSlotLogs.appendChild(logsToolbarActions);
+  }
+}
+
+function setFloatTrayOpen(open) {
+  if (!floatChrome || !floatFab || !floatTray) return;
+  floatTray.hidden = !open;
+  floatChrome.classList.toggle('is-open', open);
+  floatFab.setAttribute('aria-expanded', open ? 'true' : 'false');
+  floatFab.setAttribute('aria-label', open ? 'Hide log tools' : 'Show log tools');
+  floatChrome.classList.add('is-visible');
+  if (floatDock) floatDock.classList.add('is-visible');
+  clearTimeout(bumpFloatChrome._hide);
+  if (!open) bumpFloatChrome();
+}
+
+function bumpFloatChrome() {
+  if (floatDock) floatDock.classList.add('is-visible');
+  if (floatChrome) floatChrome.classList.add('is-visible');
+  clearTimeout(bumpFloatChrome._hide);
+  if (floatChrome?.classList.contains('is-open')) return;
+  bumpFloatChrome._hide = setTimeout(() => {
+    if (floatChrome?.classList.contains('is-open')) return;
+    floatDock?.classList.remove('is-visible');
+    floatChrome?.classList.remove('is-visible');
+  }, 2600);
+}
+
+mountFloatChromeSlots();
+bumpFloatChrome();
+
+floatFab?.addEventListener('click', () => {
+  setFloatTrayOpen(Boolean(floatTray?.hidden));
+});
+
+floatTrayClose?.addEventListener('click', () => setFloatTrayOpen(false));
+
+document.addEventListener(
+  'scroll',
+  () => {
+    bumpFloatChrome();
+  },
+  { capture: true, passive: true }
+);
+
+['mousemove', 'pointerdown', 'keydown', 'touchstart'].forEach((evt) => {
+  document.addEventListener(evt, () => bumpFloatChrome(), { passive: true });
+});
+
+floatDock?.addEventListener('mouseenter', () => {
+  floatDock.classList.add('is-visible');
+  clearTimeout(bumpFloatChrome._hide);
+});
+floatDock?.addEventListener('mouseleave', () => {
+  if (!floatChrome?.classList.contains('is-open')) bumpFloatChrome();
+});
+
+floatChrome?.addEventListener('mouseenter', () => {
+  floatChrome.classList.add('is-visible');
+  floatDock?.classList.add('is-visible');
+  clearTimeout(bumpFloatChrome._hide);
+});
+floatChrome?.addEventListener('mouseleave', () => {
+  if (!floatChrome.classList.contains('is-open')) bumpFloatChrome();
+});
 
 logPrevBtn?.addEventListener('click', () => navigateLog(-1));
 logNextBtn?.addEventListener('click', () => navigateLog(1));
 
 logEntryList.addEventListener('click', (e) => {
+  if (e.target.closest('#log-empty-reset')) {
+    e.preventDefault();
+    outcomeFilter = 'all';
+    kindFilter = 'all';
+    resetFacetFilters();
+    if (logFilter) logFilter.value = '';
+    applyListFilters();
+    return;
+  }
+
   if (e.target.closest('[data-stop]')) {
     e.stopPropagation();
     return;

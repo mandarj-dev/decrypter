@@ -793,20 +793,20 @@ body.mode-decrypt #mode-logs-panel {
 
 .logs-workspace-head {
   display: flex;
-  align-items: flex-start;
+  align-items: flex-end;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 1.25rem;
   flex-wrap: wrap;
-  padding: 1rem 1.25rem;
+  padding: 1.25rem 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
   flex-shrink: 0;
 }
 
 .logs-workspace-head h2 {
-  font-size: 1.125rem;
+  font-size: 1.35rem;
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
 }
 
 .logs-workspace-tools {
@@ -942,9 +942,8 @@ body.mode-decrypt #mode-logs-panel {
   position: relative;
   flex: 1 1 0%;
   min-height: 0;
-  display: grid;
-  grid-template-columns: minmax(280px, 360px) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
@@ -962,12 +961,8 @@ body.mode-decrypt #mode-logs-panel {
   }
 }
 
-.logs-main:not(.has-content) {
-  grid-template-columns: 1fr;
-}
-
-.logs-main:not(.has-content) .logs-sidebar,
-.logs-main:not(.has-content) .logs-detail {
+.logs-main:not(.has-content) .lr-workspace,
+.logs-main:not(.has-content) .logs-split {
   display: none;
 }
 
@@ -1635,34 +1630,7 @@ body.mode-decrypt #mode-logs-panel {
   color: var(--dim);
 }
 
-.lv-refund {
-  padding-top: 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.45rem;
-}
-
-.lv-refund-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 1rem;
-  font-size: 0.8125rem;
-  color: var(--muted);
-}
-
-.lv-refund-row.total {
-  margin-top: 0.25rem;
-  padding-top: 0.55rem;
-  border-top: 1px solid var(--border);
-  color: var(--text);
-  font-size: 0.875rem;
-}
-
-.lv-refund-mode {
-  margin-top: 0.55rem;
-  font-size: 0.75rem;
-  color: var(--muted);
-}
+/* Refund layout owned by logs-ui.css */
 
 .lv-address {
   padding-top: 0.75rem;
@@ -1796,7 +1764,7 @@ body.mode-decrypt #mode-logs-panel {
 }
 
 .logs-empty-state {
-  grid-column: 1 / -1;
+  flex: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1805,7 +1773,7 @@ body.mode-decrypt #mode-logs-panel {
 }
 
 .logs-main.has-content .logs-empty-state {
-  display: none;
+  display: none !important;
 }
 
 .upload-dragger {

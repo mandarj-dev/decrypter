@@ -90,6 +90,25 @@ function formatTimestamp(ts) {
   }
 }
 
+/** Best-effort client / store label for filters and issue summaries. */
+export function extractClientName(entry, payload, payment) {
+  if (payment?.clientName && payment.clientName !== '—') return String(payment.clientName);
+  const fromPayload = deepFind(payload, [
+    'client_name',
+    'clientName',
+    'shop_name',
+    'store_name',
+    'merchant_name',
+    'prefill_client_name',
+  ]);
+  if (fromPayload) return String(fromPayload);
+  const addr = payload?.address;
+  if (addr?.name) return String(addr.name);
+  if (addr?.email) return String(addr.email);
+  if (addr?.email_id) return String(addr.email_id);
+  return '';
+}
+
 function extractPayment(entry, kind, payload) {
   const res = entry?.response && typeof entry.response === 'object' ? entry.response : {};
   const d = res.data && typeof res.data === 'object' ? res.data : {};
@@ -255,6 +274,8 @@ export function buildLogView(entry) {
     entry.path ||
     '';
 
+  const clientName = extractClientName(entry, payload, payment);
+
   return {
     title: String(title),
     kind,
@@ -269,6 +290,7 @@ export function buildLogView(entry) {
     storeUrl: entry.url || '',
     source: entry.source || '',
     encrypted: Boolean(encrypted),
+    clientName,
     timeline: buildTimeline(entry, kind, payload),
     products,
     productPreview: String(productPreview).trim(),

@@ -8,7 +8,7 @@
   <title>Decryption &amp; Log Reader</title>
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
   <link
-    href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+    href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Instrument+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
     rel="stylesheet"
   />
   <link rel="stylesheet" href="/src/style.css" />
@@ -23,8 +23,8 @@
     }
   </script>
 </head>
-<body class="mode-decrypt">
-  <!-- ── Application header ── -->
+<body class="mode-decrypt chrome-float">
+  <!-- ── Application header (hidden when chrome-float; API Routes lives in float tray) ── -->
   <header class="app-header" id="app-chrome">
     <div class="app-header-left">
       <div class="app-mark" aria-hidden="true">
@@ -43,16 +43,12 @@
         <span class="status-live-dot" aria-hidden="true"></span>
         <span class="app-clock" id="logs-clock">00:00:00</span>
       </div>
-      <button type="button" class="btn btn-header" id="api-drawer-tab" aria-controls="api-drawer" aria-expanded="false">
-        <span class="btn-ico" aria-hidden="true">{}</span>
-        API Routes
-      </button>
     </div>
   </header>
 
-  <!-- ── Workspace switcher ── -->
-  <nav class="workspace-nav" aria-label="Workspace">
-    <div class="workspace-switch" role="group" aria-label="Tool mode">
+  <!-- ── Workspace switcher (relocated into float tray when chrome-float) ── -->
+  <nav class="workspace-nav" id="workspace-nav" aria-label="Workspace">
+    <div class="workspace-switch" id="workspace-switch" role="group" aria-label="Tool mode">
       <button type="button" class="workspace-tab mode-option active" data-mode="decrypt" aria-pressed="true">
         <span class="tab-ico" aria-hidden="true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -190,12 +186,12 @@
 
     <!-- ════════ Log Reader workspace ════════ -->
     <div class="workspace-panel logs-workspace logs-app" id="mode-logs-panel" hidden>
-      <header class="logs-workspace-head">
-        <div>
+      <header class="lr-topbar" id="chrome-logs-toolbar">
+        <div class="lr-topbar-copy">
           <h2>Log Reader</h2>
-          <p class="panel-sub">Upload or parse API log files to view and analyze request &amp; response logs.</p>
+          <p>Inspect API request logs, decrypt payloads, and triage failures.</p>
         </div>
-        <div class="logs-workspace-tools" id="chrome-logs-toolbar">
+        <div class="lr-topbar-actions" id="logs-toolbar-actions">
           <label class="logs-key-field">
             <span class="visually-hidden">Secret key</span>
             <div class="key-row">
@@ -205,99 +201,22 @@
           </label>
           <input type="file" id="log-file-input" accept=".txt,text/plain,.log" multiple hidden />
           <button type="button" class="btn" id="log-upload-btn">Upload</button>
-          <button type="button" class="btn btn-primary" id="log-parse-btn" disabled>Parse Logs</button>
-          <button type="button" class="btn btn-danger" id="log-clear-btn" disabled>Clear</button>
+          <button type="button" class="btn btn-primary" id="log-parse-btn" disabled>Parse</button>
+          <button type="button" class="btn btn-ghost" id="log-clear-btn" disabled>Clear</button>
         </div>
       </header>
 
+      <div class="lr-alert" id="logs-alert" hidden role="status" aria-live="polite">
+        <span class="lr-alert-icon" aria-hidden="true"></span>
+        <div class="lr-alert-body">
+          <strong class="lr-alert-title" id="logs-alert-title"></strong>
+          <p class="lr-alert-text" id="logs-alert-text"></p>
+        </div>
+        <div class="lr-alert-actions" id="logs-alert-actions"></div>
+        <button type="button" class="lr-alert-dismiss" id="logs-alert-dismiss" aria-label="Dismiss">×</button>
+      </div>
+
       <div class="logs-main" id="logs-main">
-        <aside class="logs-sidebar">
-          <div class="logs-sidebar-head">
-            <div class="stats-strip" id="stats-strip" role="group" aria-label="Filter by outcome">
-              <button type="button" class="sstat active" data-outcome="all">
-                <div class="sstat-n" id="count-all">0</div>
-                <div class="sstat-l">Total</div>
-              </button>
-              <button type="button" class="sstat green" data-outcome="success">
-                <div class="sstat-n" id="count-success">0</div>
-                <div class="sstat-l">Success</div>
-              </button>
-              <button type="button" class="sstat red" data-outcome="error">
-                <div class="sstat-n" id="count-error">0</div>
-                <div class="sstat-l">Failed</div>
-              </button>
-              <button type="button" class="sstat purple" data-outcome="pay">
-                <div class="sstat-n" id="count-pay">0</div>
-                <div class="sstat-l">Payments</div>
-              </button>
-            </div>
-            <span class="visually-hidden" id="count-other">0</span>
-
-            <div class="log-list-header" id="list-header">
-              <span>Logs (<span id="log-entry-count">0</span>)</span>
-              <div class="filter-row log-kind-filters" role="group" aria-label="Filter by type">
-                <button type="button" class="filter-btn log-kind-chip active" data-kind="all">All</button>
-                <button type="button" class="filter-btn log-kind-chip" data-kind="return">Return</button>
-                <button type="button" class="filter-btn log-kind-chip" data-kind="exchange">Exchange</button>
-                <button type="button" class="filter-btn log-kind-chip" data-kind="pay">Pay</button>
-                <button type="button" class="filter-btn log-kind-chip" data-kind="status">Status</button>
-                <button type="button" class="filter-btn log-kind-chip" data-kind="failed">Failed</button>
-              </div>
-            </div>
-
-            <div class="log-search">
-              <input type="search" id="log-filter" placeholder="Search logs…" />
-            </div>
-
-            <div class="log-select-bar" id="log-select-bar">
-              <label class="log-select-all">
-                <input type="checkbox" id="log-select-visible" />
-                <span>Select visible</span>
-              </label>
-              <span class="log-select-count" id="log-select-count">0 selected</span>
-              <button type="button" class="btn btn-sm btn-primary" id="log-export-selected-btn" disabled>Export</button>
-              <button type="button" class="btn btn-sm btn-ghost" id="log-clear-selected-btn" disabled>Deselect</button>
-            </div>
-          </div>
-
-          <div class="log-groups custom-scroll" id="log-entry-list">
-            <div class="log-empty">Upload and parse log files to begin</div>
-          </div>
-        </aside>
-
-        <section class="logs-detail" id="logs-detail">
-          <div class="logs-detail-head">
-            <div class="logs-nav">
-              <button type="button" class="btn btn-sm" id="log-prev-btn" title="Previous (← or K)">← Prev</button>
-              <span class="logs-nav-pos" id="log-nav-pos">0 / 0</span>
-              <button type="button" class="btn btn-sm" id="log-next-btn" title="Next (→ or J)">Next →</button>
-            </div>
-            <div class="actions actions-toolbar">
-              <button class="btn btn-sm" type="button" id="log-export-selected-detail-btn" disabled>Export selected</button>
-              <button class="btn btn-sm btn-success" type="button" id="log-copy-btn" title="Copy formatted entry JSON">Copy formatted</button>
-              <button class="btn btn-sm" type="button" id="log-copy-raw-btn" title="Copy original log block">Copy raw</button>
-              <button class="btn btn-sm" type="button" id="log-download-btn">Download</button>
-            </div>
-          </div>
-          <div class="log-viewer custom-scroll" id="log-viewer">
-            <div class="log-viewer-empty detail-empty" id="log-viewer-empty">
-              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" aria-hidden="true">
-                <rect x="3" y="3" width="18" height="18" rx="2" />
-                <path d="M3 9h18M9 21V9" />
-              </svg>
-              <p>Select a log entry to inspect</p>
-            </div>
-            <div class="log-viewer-body" id="log-viewer-body" hidden></div>
-          </div>
-        </section>
-
-        <button type="button" class="mobile-close-btn" id="mobile-close-btn" aria-label="Close detail">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
-        </button>
-
         <div class="logs-empty-state" id="logs-empty-state">
           <div class="logs-upload-stage">
             <div
@@ -308,23 +227,154 @@
               aria-label="Upload log files"
             >
               <div class="upload-dragger-icon" aria-hidden="true">
-                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+                <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
                   <path d="M12 16V4m0 0l-4 4m4-4l4 4" stroke-linecap="round" stroke-linejoin="round"/>
                   <path d="M4 16.5V18a2 2 0 002 2h12a2 2 0 002-2v-1.5" stroke-linecap="round"/>
                 </svg>
               </div>
               <p class="upload-dragger-title">Drop API log files here</p>
-              <p class="upload-dragger-sub">or click Upload · .txt · .log · multiple files supported</p>
+              <p class="upload-dragger-sub">.txt or .log · multiple files · then Parse</p>
             </div>
             <div class="uploaded-files" id="uploaded-files" hidden></div>
+            <div class="lr-empty-hints">
+              <div class="lr-hint">
+                <span class="lr-hint-k">1</span>
+                <span>Upload one or more log exports</span>
+              </div>
+              <div class="lr-hint">
+                <span class="lr-hint-k">2</span>
+                <span>Add the AES secret key if payloads are encrypted</span>
+              </div>
+              <div class="lr-hint">
+                <span class="lr-hint-k">3</span>
+                <span>Parse to decrypt, filter, and inspect</span>
+              </div>
+            </div>
           </div>
         </div>
+
+        <div class="lr-workspace logs-split">
+          <aside class="logs-sidebar lr-rail">
+            <div class="lr-rail-head">
+              <div class="stats-strip" id="stats-strip" role="group" aria-label="Filter by outcome">
+                <button type="button" class="sstat active" data-outcome="all">
+                  <span class="sstat-n" id="count-all">0</span>
+                  <span class="sstat-l">All</span>
+                </button>
+                <button type="button" class="sstat green" data-outcome="success">
+                  <span class="sstat-n" id="count-success">0</span>
+                  <span class="sstat-l">OK</span>
+                </button>
+                <button type="button" class="sstat red" data-outcome="error">
+                  <span class="sstat-n" id="count-error">0</span>
+                  <span class="sstat-l">Fail</span>
+                </button>
+                <button type="button" class="sstat teal" data-outcome="pay">
+                  <span class="sstat-n" id="count-pay">0</span>
+                  <span class="sstat-l">Pay</span>
+                </button>
+              </div>
+              <span class="visually-hidden" id="count-other">0</span>
+
+              <div class="log-list-header" id="list-header">
+                <span class="log-count-label"><span id="log-entry-count">0</span> shown</span>
+                <div class="filter-row log-kind-filters" role="group" aria-label="Filter by type">
+                  <button type="button" class="filter-btn log-kind-chip active" data-kind="all">All</button>
+                  <button type="button" class="filter-btn log-kind-chip" data-kind="return">Return</button>
+                  <button type="button" class="filter-btn log-kind-chip" data-kind="exchange">Exchange</button>
+                  <button type="button" class="filter-btn log-kind-chip" data-kind="pay">Pay</button>
+                  <button type="button" class="filter-btn log-kind-chip" data-kind="status">Status</button>
+                  <button type="button" class="filter-btn log-kind-chip" data-kind="failed">Failed</button>
+                </div>
+              </div>
+
+              <div class="log-search">
+                <input type="search" id="log-filter" placeholder="Search orders, hosts, messages…" />
+              </div>
+
+              <div class="log-advanced-filters" id="log-advanced-filters">
+                <label class="log-filter-field">
+                  <span class="visually-hidden">Status</span>
+                  <select id="log-status-filter" aria-label="Filter by status code">
+                    <option value="all">Status</option>
+                  </select>
+                </label>
+                <label class="log-filter-field">
+                  <span class="visually-hidden">Host</span>
+                  <select id="log-host-filter" aria-label="Filter by host">
+                    <option value="all">Host</option>
+                  </select>
+                </label>
+                <label class="log-filter-field">
+                  <span class="visually-hidden">Client</span>
+                  <select id="log-client-filter" aria-label="Filter by client">
+                    <option value="all">Client</option>
+                  </select>
+                </label>
+                <button type="button" class="btn btn-sm btn-ghost" id="log-filters-clear" title="Reset filters">Reset</button>
+              </div>
+
+              <div class="log-select-bar" id="log-select-bar">
+                <label class="log-select-all">
+                  <input type="checkbox" id="log-select-visible" />
+                  <span>Select</span>
+                </label>
+                <span class="log-select-count" id="log-select-count">0</span>
+                <button type="button" class="btn btn-sm btn-primary" id="log-export-selected-btn" disabled>Export</button>
+                <button type="button" class="btn btn-sm btn-ghost" id="log-clear-selected-btn" disabled>Clear</button>
+              </div>
+
+              <details class="log-insights" id="log-insights">
+                <summary class="log-insights-summary">
+                  <span class="log-insights-title">Insights</span>
+                  <span class="log-insights-meta" id="log-insights-meta"></span>
+                </summary>
+                <div class="log-insights-body" id="log-insights-body"></div>
+              </details>
+            </div>
+
+            <div class="log-groups custom-scroll" id="log-entry-list">
+              <div class="log-empty">Upload and parse log files to begin</div>
+            </div>
+          </aside>
+
+          <section class="logs-detail lr-stage" id="logs-detail">
+            <div class="logs-detail-head">
+              <div class="logs-nav">
+                <button type="button" class="btn btn-sm" id="log-prev-btn" title="Previous (← or K)">←</button>
+                <span class="logs-nav-pos" id="log-nav-pos">0 / 0</span>
+                <button type="button" class="btn btn-sm" id="log-next-btn" title="Next (→ or J)">→</button>
+              </div>
+              <div class="actions actions-toolbar">
+                <button class="btn btn-sm" type="button" id="log-export-selected-detail-btn" disabled>Export</button>
+                <button class="btn btn-sm btn-success" type="button" id="log-copy-btn" title="Copy formatted entry JSON">Copy JSON</button>
+                <button class="btn btn-sm" type="button" id="log-copy-raw-btn" title="Copy original log block">Copy raw</button>
+                <button class="btn btn-sm" type="button" id="log-download-btn">Download</button>
+              </div>
+            </div>
+            <div class="log-viewer custom-scroll" id="log-viewer">
+              <div class="log-viewer-empty detail-empty" id="log-viewer-empty">
+                <div class="lr-stage-empty">
+                  <p class="lr-stage-empty-title">No entry selected</p>
+                  <p class="lr-stage-empty-sub">Choose a log from the list to inspect response, timeline, and raw payload.</p>
+                </div>
+              </div>
+              <div class="log-viewer-body" id="log-viewer-body" hidden></div>
+            </div>
+          </section>
+        </div>
+
+        <button type="button" class="mobile-close-btn" id="mobile-close-btn" aria-label="Close detail">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
       </div>
 
       <footer class="status-bar logs-status" id="log-status-bar" hidden>
         <span class="status-dot" aria-hidden="true"></span>
-        <span id="log-status-text">Ready — upload log files and enter your secret key</span>
-        <span class="status-hint">Encrypted fields decrypt automatically · Ctrl+Enter to parse</span>
+        <span id="log-status-text">Ready</span>
       </footer>
     </div>
   </div>
@@ -352,6 +402,38 @@
       </table>
     </div>
   </aside>
+
+  <!-- Center dock: mode switch + API Routes -->
+  <div class="float-dock is-visible" id="float-dock">
+    <div class="float-pill" id="float-pill" role="toolbar" aria-label="Workspace">
+      <div class="float-pill-modes" id="float-slot-modes"></div>
+      <span class="float-pill-divider" aria-hidden="true"></span>
+      <button type="button" class="float-pill-api" id="api-drawer-tab" aria-controls="api-drawer" aria-expanded="false" title="API Routes">
+        <span class="btn-ico" aria-hidden="true">{}</span>
+        <span class="float-pill-api-label">API Routes</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Corner controls: log tools only -->
+  <div class="float-chrome is-visible" id="float-chrome">
+    <div class="float-tray" id="float-tray" hidden>
+      <div class="float-tray-head">
+        <span class="float-tray-title">Log tools</span>
+        <button type="button" class="float-tray-close" id="float-tray-close" aria-label="Close controls">×</button>
+      </div>
+      <div class="float-tray-slot float-logs-only" id="float-slot-logs"></div>
+      <div class="float-tray-footer">
+        <span class="float-clock" id="float-clock" aria-hidden="true">00:00:00</span>
+      </div>
+    </div>
+    <button type="button" class="float-fab" id="float-fab" aria-label="Show log tools" aria-controls="float-tray" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <circle cx="12" cy="12" r="3" />
+        <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M5.6 18.4L7 17M17 7l1.4-1.4" stroke-linecap="round" />
+      </svg>
+    </button>
+  </div>
 
   <div id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/src/main.js"></script>

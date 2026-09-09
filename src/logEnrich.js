@@ -17,12 +17,19 @@ export function enrichLogEntry(entry) {
     ? entry.timestamp.replace('T', ' ').replace(/\.\d+Z$/, 'Z')
     : '';
 
+  const clientName = String(view.clientName || '').trim();
+  const statusKey = entry.statusCode == null ? 'none' : String(entry.statusCode);
+  const issueLabel = clientName || host || 'Unknown client';
+
   return {
     ...entry,
     kind: entry.kind || view.kind,
     orderId: view.title,
     productPreview: view.productPreview,
     host,
+    clientName,
+    statusKey,
+    issueLabel,
     timeShort,
     responsePreview: entry.statusMessage || entry?.response?.message || '',
     _view: view,
